@@ -1,6 +1,6 @@
-# Rob ↔ Flo — quotas et stratégie MAX JEUNE
+# FloRoBot — quotas et stratégie MAX JEUNE
 
-Rob ↔ Flo t'aide à décider **quoi réserver, et quand**, avec ton abonnement MAX JEUNE (ou MAX SENIOR).
+FloRoBot t'aide à décider **quoi réserver, et quand**, avec ton abonnement MAX JEUNE (ou MAX SENIOR).
 Il lit l'open data SNCF, garde l'historique des quotas de tout le réseau, et transforme tout ça en plan d'action.
 
 - **Trajet** : verdict immédiat (réserver maintenant, compromis, attendre ou payer), options à 0 € classées
@@ -19,7 +19,7 @@ les conditions de SNCF Connect interdisent les robots de réservation. Il te pr�
 ```
 SNCF open data (jeu « tgvmax », publié ~1×/jour vers 4 h 20 UTC)
         │
-        ├── GitHub Actions « FloRob'ot » (toutes les 30 min le matin, puis toutes les 3 h)
+        ├── GitHub Actions « FloRoBot » (toutes les 30 min le matin, puis toutes les 3 h)
         │     ├─ s'arrête en quelques secondes si rien n'a changé
         │     ├─ met à jour l'historique de chaque trajet (branche `data`)
         │     ├─ envoie les alertes ntfy (config.json)
