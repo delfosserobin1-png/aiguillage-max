@@ -18,12 +18,12 @@ const { chromium } = await import(PW);
 await rm(OUT, { recursive: true, force: true });
 await mkdir(path.join(OUT, 'shots'), { recursive: true });
 const fx = path.join(OUT, 'fixture');
-const snaps = await generate({ out: fx, days: 10 });
+const snaps = await generate({ out: fx, days: 20 });
 const cfg = { alertes: [{ nom: 'Paris → Lyon, vendredi soir', de: ['PARIS (intramuros)'], vers: ['LYON (intramuros)'], sens: 'aller-retour', jours: ['ven', 'dim'], heures: ['17:00', '21:00'], heures_retour: ['15:00', '22:00'] }] };
 await writeFile(path.join(OUT, 'config.json'), JSON.stringify(cfg, null, 2));
 for (const s of snaps) {
   execFileSync('node', [path.join(ROOT, 'collector/collect.mjs'), '--state', path.join(OUT, 'state'), '--config', path.join(OUT, 'config.json')],
-    { env: { ...process.env, TGVMAX_FIXTURE: s.dir, MIN_ROWS: '1000', NTFY_DRYRUN: '1' }, stdio: 'ignore' });
+    { env: { ...process.env, TGVMAX_FIXTURE: s.dir, MIN_ROWS: '1000', NTFY_DRYRUN: '1', KEEP_PAST_DAYS: '6' }, stdio: 'ignore' });
 }
 const site = path.join(OUT, 'site');
 await cp(path.join(ROOT, 'app'), site, { recursive: true });
@@ -88,6 +88,14 @@ await shot(page, '01-trajet.png');
 await page.click('[data-viz="hist"]');
 await page.waitForTimeout(200);
 await shot(page, '02-historique.png');
+await page.click('[data-viz="year"]');
+await page.waitForSelector('.cal .d', { timeout: 5000 });
+const yday = page.locator('.cal button.d').nth(3);
+if (await yday.count()) await yday.click();
+await page.waitForTimeout(200);
+await shot(page, '02b-annee.png');
+results.annee = await page.locator('#t-viz .card h2').first().textContent();
+results.anneeJours = await page.locator('.cal button.d').count();
 await page.click('[data-viz="radar"]');
 await page.locator('.radar .rowhit').nth(3).dispatchEvent('click');
 await page.waitForTimeout(200);
@@ -125,6 +133,11 @@ await pick(page, '#p-ad', 'paris');
 await page.click('#f-alert button[type=submit]');
 await page.waitForSelector('#a-out pre');
 await shot(page, '09-suivi.png');
+
+await page.goto(`http://127.0.0.1:${PORT}/#guide`);
+await page.waitForSelector('#tab-guide:not([hidden]) .guide');
+await shot(page, '11-guide.png');
+results.guide = await page.locator('#tab-guide .guide h2').count();
 
 const dark = await newPage('dark');
 await runTrajet(dark, { o: 'paris', d: 'lyon', date: friday, slot: 'soir' });
