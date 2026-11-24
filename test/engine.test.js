@@ -134,6 +134,21 @@ test('règles d’alerte : sens, jours, heures', () => {
   assert.equal(E.ruleMatches(rule, monday), false);
 });
 
+test('règles d’alerte : jours et arrivée propres au retour', () => {
+  const rule = { de: ['PARIS (intramuros)'], vers: ['VANNES'], sens: 'aller-retour', jours: ['jeu', 'ven'], heures: ['19:30', '23:59'],
+    jours_retour: ['dim'], heures_retour: ['12:00', '23:59'], arrivee_retour: ['00:00', '20:30'] };
+  const dep = (o, d, h1, h2, n, date) => E.normalizeRows([row(o, d, h1, h2, true, n, date)])[0];
+  assert.equal(E.ruleMatches(rule, dep('PARIS (intramuros)', 'VANNES', '22:15', '01:25', 1, '2026-12-03')), 'aller');
+  assert.equal(E.ruleMatches(rule, dep('PARIS (intramuros)', 'VANNES', '18:00', '20:25', 2, '2026-12-04')), false);
+  assert.equal(E.ruleMatches(rule, dep('VANNES', 'PARIS (intramuros)', '17:46', '20:09', 3, '2026-12-06')), 'retour');
+  assert.equal(E.ruleMatches(rule, dep('VANNES', 'PARIS (intramuros)', '18:26', '21:16', 4, '2026-12-06')), false);
+  assert.equal(E.ruleMatches(rule, dep('VANNES', 'PARIS (intramuros)', '17:46', '20:09', 5, '2026-12-04')), false);
+  assert.equal(E.ruleMatches(rule, dep('PARIS (intramuros)', 'VANNES', '20:00', '22:29', 6, '2026-12-06')), false);
+  const midnight = { ...rule, arrivee_retour: ['00:00', '23:59'] };
+  assert.equal(E.ruleMatches(midnight, dep('VANNES', 'PARIS (intramuros)', '20:14', '22:42', 7, '2026-12-06')), 'retour');
+  assert.equal(E.ruleMatches(midnight, dep('VANNES', 'PARIS (intramuros)', '21:26', '00:04', 8, '2026-12-06')), false);
+});
+
 test('gares voisines', () => {
   const all = ['PARIS (intramuros)', 'MASSY TGV', 'MARNE LA VALLEE CHESSY', 'LYON (intramuros)', 'LYON ST EXUPERY TGV', 'AIX EN PROVENCE TGV', 'MARSEILLE ST CHARLES'];
   assert.deepEqual(E.nearbyStations('PARIS (intramuros)', all), ['MARNE LA VALLEE CHESSY', 'MASSY TGV']);
