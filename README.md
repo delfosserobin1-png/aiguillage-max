@@ -45,22 +45,30 @@ SNCF open data (jeu « tgvmax », publié ~1×/jour vers 4 h 20 UTC)
 {
   "alertes": [
     {
-      "nom": "Paris → Lyon, le vendredi soir",
+      "nom": "Paris ↔ Lyon, le week-end",
       "de": ["PARIS (intramuros)"],
       "vers": ["LYON (intramuros)"],
       "sens": "aller-retour",
-      "jours": ["ven", "dim"],
+      "jours": ["ven"],
       "heures": ["17:00", "21:00"],
-      "heures_retour": ["15:00", "22:00"],
+      "jours_retour": ["dim"],
+      "heures_retour": ["15:00", "23:59"],
+      "arrivee_retour": ["00:00", "23:59"],
       "dates": ["2026-12-01", "2027-01-31"],
-      "fermetures": true
+      "fermetures": true,
+      "note": "Texte libre, affiché dans l'onglet Suivi."
     }
   ]
 }
 ```
 
 Les noms de gares sont ceux du jeu SNCF (`PARIS (intramuros)`, `MARSEILLE ST CHARLES`…) : l'autocomplétion de l'app te les donne.
-`jours`, `dates`, `heures_retour` et `fermetures` sont facultatifs.
+Tous les champs sauf `de` et `vers` sont facultatifs :
+
+- `heures` : fenêtre de départ ; `arrivee` : fenêtre d'arrivée (une arrivée après minuit compte après 23:59) ;
+- au retour, `jours_retour`, `heures_retour` et `arrivee_retour` remplacent `jours`, `heures` et `arrivee` ;
+- `fermetures: false` : seulement les ouvertures, pas les fermetures ;
+- `note` : un rappel pour toi, affiché dans l'onglet Suivi.
 
 ## Ce que disent (et ne disent pas) les données
 
