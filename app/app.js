@@ -1034,9 +1034,18 @@ async function renderSuivi() {
     ${repo ? `<div class="actions"><a class="btn quiet small" href="${repo.actions}" target="_blank" rel="noopener">Voir le robot sur GitHub</a></div>` : ''}`;
 
   const rules = S.config.alertes || [];
-  const desc = r => [r.sens && /retour/.test(r.sens) ? 'aller-retour' : 'aller', r.jours?.length ? r.jours.join(', ') : 'tous les jours', r.heures?.length === 2 ? `${r.heures[0]}–${r.heures[1]}` : 'toute la journée', r.dates?.length === 2 ? `du ${E.frShort(r.dates[0])} au ${E.frShort(r.dates[1])}` : null].filter(Boolean).join(', ');
+  const arrival = a => (a[0] > '00:00' ? `arrivée ${a[0]}–${a[1]}` : a[1] === '23:59' ? 'arrivée avant minuit' : `arrivée avant ${a[1]}`);
+  const leg = (j, h, a) => [j?.length ? j.join(', ') : 'tous les jours', h?.length === 2 ? `départ ${h[0]}–${h[1]}` : 'toute la journée', a?.length === 2 ? arrival(a) : null].filter(Boolean).join(', ');
+  const desc = r => {
+    const back = /retour/.test(r.sens || '');
+    const lines = [`Aller : ${leg(r.jours, r.heures, r.arrivee)}`];
+    if (back) lines.push(`Retour : ${leg(r.jours_retour?.length ? r.jours_retour : r.jours, r.heures_retour || r.heures, r.arrivee_retour || r.arrivee)}`);
+    if (r.dates?.length === 2) lines.push(`Du ${E.frShort(r.dates[0])} au ${E.frShort(r.dates[1])}`);
+    if (r.note) lines.push(r.note);
+    return lines;
+  };
   $('#s-alerts').innerHTML = `<h2>Mes alertes</h2>${rules.length
-    ? `<ul class="alerts-list">${rules.map(r => `<li><b>${esc(r.nom || `${E.pretty(r.de[0])} → ${E.pretty(r.vers[0])}`)}</b><div class="small muted">${esc(desc(r))}</div></li>`).join('')}</ul>`
+    ? `<ul class="alerts-list">${rules.map(r => `<li><b>${esc(r.nom || `${E.pretty(r.de[0])} → ${E.pretty(r.vers[0])}`)}</b>${desc(r).map(l => `<div class="small muted">${esc(l)}</div>`).join('')}</li>`).join('')}</ul>`
     : '<p class="lead">Aucune alerte pour l’instant. Crée-en une ci-dessous : chaque matin, le robot t’envoie une notification ntfy quand un départ s’ouvre ou se ferme.</p>'}
     <p class="note">Notifications : appli ntfy, abonnée au canal secret donné à l’installation.</p>`;
 
