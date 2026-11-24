@@ -46,6 +46,7 @@ async function newPage(scheme = 'light') {
     await route.fulfill({ status: r.status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(r.body) });
   });
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+  await ctx.addInitScript(() => { try { if (!localStorage.getItem('aiguillage.profil')) localStorage.setItem('aiguillage.profil', 'rob'); } catch {} });
   const page = await ctx.newPage();
   page.on('console', m => { if (m.type() === 'error') errors.push(`[console] ${m.text()}`); });
   page.on('pageerror', e => errors.push(`[pageerror] ${e.message}`));
