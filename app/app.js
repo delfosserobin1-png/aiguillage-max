@@ -10,10 +10,38 @@ const pct = x => (x >= 0.95 ? '> 95 %' : x > 0 && x < 0.05 ? '< 5 %' : `${Math.r
 /* Typographie française : espaces fines insécables avant % : ; ? ! » et après «. */
 const typo = h => h.replace(/(\d|[<>]) %/g, '$1 %').replace(/ ([:;?!»])/g, ' $1').replace(/« /g, '« ').replace(/(\d) (h|min)\b/g, '$1 $2');
 const plural = (n, s, p = s + 's') => `${n} ${n > 1 ? p : s}`;
+/* ---------- comptes : Rob et Flo ont chacun leurs données sur le téléphone ---------- */
+const PROFILS = { rob: 'Rob', flo: 'Flo' };
+const PERSO = ['resas', 'partages', 'trajet', 'flex', 'altOff', 'recents', 'explore'];
+const profil = (() => { try { const p = localStorage.getItem('aiguillage.profil'); return PROFILS[p] ? p : null; } catch { return null; } })();
 const store = {
-  get(k, d) { try { const v = localStorage.getItem('aiguillage.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
-  set(k, v) { try { localStorage.setItem('aiguillage.' + k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
+  get(k, d) { try { const v = localStorage.getItem(`aiguillage.${profil || 'invite'}.${k}`); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { if (!profil) return; try { localStorage.setItem(`aiguillage.${profil}.${k}`, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
 };
+function chooseProfil(p) {
+  try {
+    // première fois sur ce téléphone : les données d'avant les comptes vont au compte choisi
+    const fresh = !PERSO.some(k => localStorage.getItem(`aiguillage.${p}.${k}`) != null);
+    for (const k of PERSO) {
+      const v = localStorage.getItem('aiguillage.' + k);
+      if (v != null && fresh) localStorage.setItem(`aiguillage.${p}.${k}`, v);
+      localStorage.removeItem('aiguillage.' + k);
+    }
+    localStorage.setItem('aiguillage.profil', p);
+  } catch { /* stockage indisponible */ }
+  location.reload();
+}
+function initProfil() {
+  $$('.brand .who').forEach(b => {
+    const on = b.dataset.p === profil;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
+    b.title = on ? `Compte de ${PROFILS[b.dataset.p]}` : `Passer au compte de ${PROFILS[b.dataset.p]}`;
+    b.addEventListener('click', () => { if (b.dataset.p !== profil) chooseProfil(b.dataset.p); });
+  });
+  $$('#who [data-p]').forEach(b => b.addEventListener('click', () => chooseProfil(b.dataset.p)));
+  $('#who').hidden = !!profil;
+}
 const ICON = {
   warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 21h20z"/><path d="M12 10v5M12 18h.01"/></svg>',
   info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></svg>',
@@ -27,7 +55,7 @@ function toast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+  toastTimer = setTimeout(() => t.classList.remove('show'), Math.max(2800, msg.length * 55));
 }
 async function copy(text) {
   try { await navigator.clipboard.writeText(text); toast('Copié dans le presse-papiers'); }
@@ -52,6 +80,7 @@ const S = {
   apiMeta: null, stations: [], names: [],
   hist: { meta: null, stats: null },
   resas: store.get('resas', []),
+  partages: store.get('partages', []),
   config: null, cache: new Map(),
 };
 
@@ -343,17 +372,20 @@ async function analyse() {
 
 function trainsOf(legs) { return legs.map(l => l.trains.join('/')).join(' + '); }
 
+const CHECK_BTN = `<a class="btn ghost" href="${SNCF_CONNECT}" target="_blank" rel="noopener">Vérifier sur SNCF Connect</a>`;
+const acts = o => (o.noCheck || (o.actions || []).some(x => x.includes(SNCF_CONNECT)) ? o.actions || [] : [...(o.actions || []), CHECK_BTN]);
+
 function boardHTML() {
   const { q, plan } = T.last;
   const v = plan.verdict;
   const route = `${P(q.o[0])} → ${P(q.d[0])}`;
   const b = (o) => `<div class="board"><p class="verdict">${o.verdict}</p><div class="big ${o.cls || ''}">${o.big}</div>
     ${o.sub ? `<p class="sub">${o.sub}</p>` : ''}<p class="route">${o.route || route}</p>${o.facts?.length ? `<p class="facts">${o.facts.filter(Boolean).map(f => `<span>${f}</span>`).join('')}</p>` : ''}
-    ${o.say ? `<p class="say">${o.say}</p>` : ''}${o.actions ? `<div class="actions">${o.actions.join('')}</div>` : ''}</div>`;
-  if (v.code === 'passe') return b({ verdict: 'Cette date est passée', big: esc(E.frDay(q.date)), cls: 'date', say: 'Choisis une date à venir.' });
+    ${o.say ? `<p class="say">${o.say}</p>` : ''}${acts(o).length ? `<div class="actions">${acts(o).join('')}</div>` : ''}</div>`;
+  if (v.code === 'passe') return b({ verdict: 'Cette date est passée', big: esc(E.frDay(q.date)), cls: 'date', noCheck: true, say: 'Choisis une date à venir.' });
   if (v.code === 'trop-tot') {
     return b({
-      verdict: 'Trop tôt : les places MAX ouvrent à J-30', big: esc(E.frDay(v.openDay)), cls: 'date',
+      verdict: 'Trop tôt : les places MAX ouvrent à J-30', big: esc(E.frDay(v.openDay)), cls: 'date', noCheck: true,
       facts: [`Voyage le <b>${esc(E.frDayLong(q.date))}</b>`, `dans ${plural(plan.J, 'jour')}`],
       say: 'Le radar ci-dessous montre comment ton créneau se comporte sur les semaines déjà ouvertes : c’est ta meilleure indication pour le jour de l’ouverture.',
       actions: ['<button class="btn" data-act="ics">Me le rappeler</button>'],
@@ -557,7 +589,7 @@ function icsForTrip() {
   const mk = (id, day, time, title, desc, alarm = 0) => ev.push({ uid: `${id}-${q.date}-${E.slugify(q.o[0])}-${E.slugify(q.d[0])}@aiguillage`, start: E.parisToUTC(day, time), title, description: desc, alarm });
   for (const d of plan.deadlines.list) {
     if (d.past) continue;
-    if (d.id === 'ouverture') mk('ouverture', d.day, '07:00', `Ouverture MAX : ${route} du ${E.frDay(q.date)}`, 'Les places MAX JEUNE de ce jour ouvrent à J-30. Relance Aiguillage.', 0);
+    if (d.id === 'ouverture') mk('ouverture', d.day, '07:00', `Ouverture MAX : ${route} du ${E.frDay(q.date)}`, 'Les places MAX JEUNE de ce jour ouvrent à J-30. Relance l’app.', 0);
     if (d.id === 'remboursement') mk('j7', d.day, '18:00', `Dernier jour pour annuler un billet -30 % sans frais (${route})`, 'Après aujourd’hui, l’annulation coûte 19 € sur TGV INOUI.', 0);
     if (d.id === 'confirmation-debut') mk('confirmer', d.day, '09:00', `Confirmer ma résa MAX ${route}`, 'Espace MAX : confirme ton voyage (jusqu’à la veille 17 h).', 0);
     if (d.id === 'confirmation-fin') mk('derniere-limite', d.day, '15:00', `Dernière limite 17 h : confirmer ${route}`, 'Sans confirmation avant 17 h, la réservation est annulée automatiquement.', 0);
@@ -847,39 +879,89 @@ function networkCurveHTML() {
 /* ================= onglet Explorer ================= */
 
 const X = {};
+const MONTH_SHORT = new Intl.DateTimeFormat('fr-FR', { month: 'short', timeZone: 'UTC' });
+const slotSpan = set => { const w = [...set].map(k => SLOTS[k]); return [w.map(x => x[0]).sort()[0], w.map(x => x[1]).sort().at(-1)]; };
+
+function multiChips(container, set) {
+  container.innerHTML = Object.entries(SLOTS).map(([k, [, , l]]) => `<button type="button" class="chip" data-slot="${k}">${l}</button>`).join('');
+  const draw = () => $$('[data-slot]', container).forEach(x => x.setAttribute('aria-pressed', String(set.has(x.dataset.slot))));
+  container.addEventListener('click', e => {
+    const b = e.target.closest('[data-slot]');
+    if (!b) return;
+    const k = b.dataset.slot;
+    if (k === 'jour') { set.clear(); set.add('jour'); } else {
+      set.delete('jour');
+      if (set.has(k)) set.delete(k); else set.add(k);
+      if (!set.size) set.add('jour');
+    }
+    draw();
+  });
+  draw();
+}
+
 function initExplorer() {
   const saved = store.get('explore', {});
   X.p = picker($('#p-e'));
   if (saved.o) X.p.set(saved.o, true);
-  X.when = saved.when || 'we';
-  X.outSlot = saved.outSlot || 'jour';
-  X.retSlot = saved.retSlot || 'aprem';
-  const whens = { we: 'Ce week-end', we2: 'Le week-end suivant', demain: 'Demain', date: 'Une date' };
-  $('#e-when').innerHTML = Object.entries(whens).map(([k, l]) => `<button type="button" class="chip" data-when="${k}" aria-pressed="${k === X.when}">${l}</button>`).join('');
+  X.out = new Set(saved.outSlots || [saved.outSlot || 'jour']);
+  X.ret = new Set(saved.retSlots || [saved.retSlot || 'aprem']);
+  const shortcuts = { we: 'Ce week-end', we2: 'Le week-end suivant', demain: 'Demain' };
+  const pickShortcut = k => {
+    if (k === 'demain') { X.a = E.addDays(E.parisDay(), 1); X.b = null; return; }
+    const w = weekendDates(k === 'we2' ? 1 : 0);
+    X.a = w.out[0]; X.b = w.ret[0];
+  };
+  pickShortcut('we');
+  $('#e-when').innerHTML = Object.entries(shortcuts).map(([k, l]) => `<button type="button" class="chip" data-when="${k}">${l}</button>`).join('');
   $('#e-when').addEventListener('click', e => {
     const b = e.target.closest('[data-when]');
     if (!b) return;
-    X.when = b.dataset.when;
-    $$('#e-when [data-when]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-    $('#e-dates').hidden = X.when !== 'date';
+    pickShortcut(b.dataset.when);
+    drawRange();
   });
-  $('#e-dates').hidden = X.when !== 'date';
-  $('#e-d1').value = E.addDays(E.parisDay(), 1);
-  $('#e-d2').value = E.addDays(E.parisDay(), 3);
-  slotChips($('#e-outslots'), X.outSlot, k => { X.outSlot = k; });
-  slotChips($('#e-retslots'), X.retSlot, k => { X.retSlot = k; });
-  $('#e-ret').addEventListener('change', () => { $('#e-retslots').hidden = !$('#e-ret').checked; });
+  $('#e-cal').addEventListener('click', e => {
+    const c = e.target.closest('[data-day]');
+    if (!c) return;
+    const d = c.dataset.day;
+    if (!X.a || X.b || d < X.a) { X.a = d; X.b = null; } else X.b = d;
+    drawRange();
+  });
+  $('#e-sum').addEventListener('click', e => { if (e.target.closest('[data-noret]')) { X.b = null; drawRange(); } });
+  drawRange();
+  multiChips($('#e-outslots'), X.out);
+  multiChips($('#e-retslots'), X.ret);
   $('#f-exp').addEventListener('submit', e => { e.preventDefault(); explore(); });
   $('#e-out').addEventListener('click', e => {
     const b = e.target.closest('[data-analyse]');
     if (!b) return;
     const { o, d, date } = JSON.parse(b.dataset.analyse);
     T.po.set(o, true); T.pd.set(d, true); $('#t-date').value = date;
-    const s = SLOTS[X.outSlot];
-    $('#t-from').value = s[0]; $('#t-to').value = s[1];
+    const [f, t] = slotSpan(X.out);
+    $('#t-from').value = f; $('#t-to').value = t;
     location.hash = '#trajet';
     analyse();
   });
+}
+
+/* Calendrier des 30 jours ouverts à la réservation : 1er appui = aller, 2e = retour. */
+function drawRange() {
+  const today = E.parisDay(), last = E.addDays(today, 30);
+  const start = E.addDays(today, 1 - E.isoWeekday(today)), end = E.addDays(last, 7 - E.isoWeekday(last));
+  let html = ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(w => `<span class="wd">${w}</span>`).join('');
+  for (let d = start; d <= end; d = E.addDays(d, 1)) {
+    const off = d < today || d > last, n = +d.slice(8);
+    const cls = ['d', off && 'off', d === today && 'today', d === X.a && 'a', d === X.b && 'b', X.a && X.b && d > X.a && d < X.b && 'in'].filter(Boolean).join(' ');
+    const month = n === 1 || d === today ? `<small>${esc(MONTH_SHORT.format(E.parseDay(d)))}</small>` : '';
+    html += off ? `<span class="${cls}">${n}</span>`
+      : `<button type="button" class="${cls}" data-day="${d}" aria-pressed="${d === X.a || d === X.b}" aria-label="${esc(E.frDayLong(d))}">${month}${n}</button>`;
+  }
+  $('#e-cal').innerHTML = html;
+  $('#e-sum').innerHTML = X.a
+    ? `<span>Aller : <b>${esc(E.frDay(X.a))}</b></span>${X.b
+      ? `<span>Retour : <b>${esc(E.frDay(X.b))}</b></span><button type="button" data-noret>Sans retour</button>`
+      : '<span class="muted">Retour : touche une 2e date, ou laisse vide pour un aller simple</span>'}`
+    : '<span class="muted">Touche la date de l’aller.</span>';
+  $('#e-retbox').hidden = !X.b;
 }
 
 function weekendDates(offsetWeeks) {
@@ -903,24 +985,19 @@ async function explore() {
   const out = $('#e-out');
   const o = X.p.get();
   if (!o) { out.innerHTML = banner('warn', 'Choisis ta gare de départ dans la liste.'); return; }
-  const withReturn = $('#e-ret').checked;
-  let outDates, retDates;
-  const today = E.parisDay();
-  if (X.when === 'we') ({ out: outDates, ret: retDates } = weekendDates(0));
-  else if (X.when === 'we2') ({ out: outDates, ret: retDates } = weekendDates(1));
-  else if (X.when === 'demain') { outDates = [E.addDays(today, 1)]; retDates = [E.addDays(today, 1), E.addDays(today, 2)]; }
-  else { outDates = [$('#e-d1').value]; retDates = [$('#e-d2').value || $('#e-d1').value]; }
-  if (!outDates[0] || outDates.some(d => !d)) { out.innerHTML = banner('warn', 'Choisis une date d’aller.'); return; }
-  store.set('explore', { o, when: X.when, outSlot: X.outSlot, retSlot: X.retSlot });
+  if (!X.a) { out.innerHTML = banner('warn', 'Touche la date de l’aller dans le calendrier.'); return; }
+  const withReturn = !!X.b;
+  const outDates = [X.a], retDates = withReturn ? [X.b] : [];
+  store.set('explore', { o, outSlots: [...X.out], retSlots: [...X.ret] });
   out.innerHTML = loading('Recherche des destinations à 0 €…');
   try {
-    const os = SLOTS[X.outSlot], rs = SLOTS[X.retSlot];
-    const outR = [outDates[0], outDates[outDates.length - 1]], retR = [retDates[0], retDates[retDates.length - 1]];
+    const wins = set => [...set].map(k => [SLOTS[k][0], SLOTS[k][1]]);
+    const outR = [X.a, X.a], retR = [X.b, X.b];
     const [outDeps, retDeps] = await Promise.all([
       apiRows(`${E.orEq('origine', [o])} and od_happy_card="OUI"`, outR),
       withReturn ? apiRows(`${E.orEq('destination', [o])} and od_happy_card="OUI"`, retR) : [],
     ]);
-    const list = E.exploreDestinations(outDeps, retDeps, { from: [o], outFrom: os[0], outTo: os[1], retFrom: rs[0], retTo: rs[1], withReturn, outDates, retDates });
+    const list = E.exploreDestinations(outDeps, retDeps, { from: [o], outWins: wins(X.out), retWins: wins(X.ret), withReturn, outDates, retDates });
     const label = `${outDates.map(E.frDay).join(' ou ')}${withReturn ? `, retour ${retDates.map(E.frDay).join(' ou ')}` : ''}`;
     if (!list.length) { out.innerHTML = `<div class="card empty"><b>Aucune destination à 0 €</b>Depuis ${P(o)} (${esc(label)}), dans ce créneau. Élargis le créneau ou essaie une autre date.</div>`; return; }
     const both = list.filter(x => x.both).length;
@@ -955,7 +1032,7 @@ function initResas() {
     e.preventDefault();
     const o = R.po.get(), d = R.pd.get(), date = $('#r-date').value;
     if (!o || !d || !date) { toast('Indique au moins les gares et la date'); return; }
-    addResa({ o, d, date, dep: $('#r-dep').value, arr: '', train: $('#r-train').value.trim(), tarif: $('#r-tarif').value });
+    addResa({ o, d, date, dep: $('#r-dep').value, arr: '', train: $('#r-train').value.trim(), voiture: $('#r-voiture').value.trim(), place: $('#r-place').value.trim(), tarif: $('#r-tarif').value });
     $('#r-add').open = false;
     renderResas();
     toast('Réservation ajoutée');
@@ -965,7 +1042,9 @@ function initResas() {
     if (!b) return;
     const r = S.resas.find(x => x.id === b.dataset.id);
     if (b.dataset.r === 'ics') { icsForResas(); return; }
+    if (b.dataset.r === 'unshare') { S.partages = S.partages.filter(x => x.k !== b.dataset.id); store.set('partages', S.partages); renderShared(); return; }
     if (!r) return;
+    if (b.dataset.r === 'share') { shareResa(r); return; }
     if (b.dataset.r === 'confirm') r.statut = r.statut === 'confirmee' ? 'active' : 'confirmee';
     if (b.dataset.r === 'cancel') r.statut = r.statut === 'annulee' ? 'active' : 'annulee';
     if (b.dataset.r === 'del') S.resas = S.resas.filter(x => x !== r);
@@ -984,21 +1063,79 @@ function renderResas() {
   const old = st.list.filter(r => r.etat === 'passee' || r.etat === 'annulee');
   const card = r => `<div class="resa${r.etat === 'annulee' || r.etat === 'passee' ? ' dim' : ''}">
       <div class="l1"><span class="when">${esc(E.frDay(r.date))}${r.dep ? ` ${esc(r.dep)}` : ''}</span><span class="pill ${r.etat}">${esc(PILL[r.etat]?.(r) || r.etat)}</span></div>
-      <div class="small">${P(r.o)} → ${P(r.d)}${r.train ? ` <span class="muted">train ${esc(r.train)}</span>` : ''}${r.tarif === 'avantage' ? ' <span class="muted">(-30 %)</span>' : ''}</div>
+      <div class="small">${P(r.o)} → ${P(r.d)}${r.train ? ` <span class="muted">train ${esc(r.train)}</span>` : ''}${seat(r)}${r.tarif === 'avantage' ? ' <span class="muted">(-30 %)</span>' : ''}</div>
       ${r.conflits.length ? banner('warn', `Deux réservations au départ de ${P(r.o)} ce jour-là : la règle n’en autorise qu’une par jour et par ville.`) : ''}
       <div class="actions">${r.tarif !== 'avantage' && r.etat !== 'passee' && r.etat !== 'annulee' ? `<button class="btn quiet small" data-r="confirm" data-id="${r.id}">${r.statut === 'confirmee' ? 'Annuler la confirmation' : 'J’ai confirmé'}</button>` : ''}
       ${r.etat !== 'passee' ? `<button class="btn quiet small" data-r="cancel" data-id="${r.id}">${r.statut === 'annulee' ? 'Rétablir' : 'Annulée'}</button>` : ''}
+      ${r.etat !== 'passee' && r.etat !== 'annulee' ? `<button class="btn quiet small" data-r="share" data-id="${r.id}">Partager mon trajet</button>` : ''}
       <button class="btn ghost small" data-r="del" data-id="${r.id}">Supprimer</button></div></div>`;
   $('#r-list').innerHTML = `<h2>Mes réservations</h2>${upcoming.length ? upcoming.map(card).join('') : '<div class="empty"><b>Aucune réservation suivie</b>Ajoute-les depuis l’analyse d’un trajet (« J’ai réservé ») ou à la main. Elles restent sur ce téléphone.</div>'}
     ${upcoming.length ? '<div class="actions"><button class="btn quiet small" data-r="ics">Ajouter les rappels de confirmation à mon agenda</button></div>' : ''}
     ${old.length ? `<details class="more"><summary>Passées ou annulées (${old.length})</summary>${old.map(card).join('')}</details>` : ''}`;
+  renderShared();
   $('#r-rules').innerHTML = `<h2>Les règles à retenir</h2><ul class="insights">
     <li>${E.RULES.maxSlots} réservations à 0 € maximum en même temps ; une place se libère quand tu voyages ou annules.</li>
     <li>Une seule réservation par jour au départ d’une même ville.</li>
     <li>Confirmation obligatoire entre J-2 et la veille 17 h, sinon annulation automatique.</li>
     <li>Billet 0 € : annulation gratuite jusqu’au départ. Pense à libérer ta place si tu ne pars plus.</li>
     <li>Billet -30 % : remboursement gratuit jusqu’à J-7 inclus, puis 19 € sur TGV INOUI.</li></ul>
-    <p class="note">Ces réservations sont un aide-mémoire stocké sur ce téléphone : Aiguillage ne se connecte jamais à ton compte SNCF.</p>`;
+    <p class="note">Ces réservations sont un aide-mémoire stocké sur ce téléphone, dans ton compte : l’app ne se connecte jamais à ton compte SNCF.</p>`;
+}
+
+const seat = r => (r.voiture || r.place ? ` <span class="muted">${[r.voiture && `voiture ${esc(r.voiture)}`, r.place && `place ${esc(r.place)}`].filter(Boolean).join(', ')}</span>` : '');
+
+/* ---------- partager un trajet : un lien, rien n'est envoyé ailleurs ---------- */
+const b64e = s => btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const b64d = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)));
+async function shareResa(r) {
+  const who = PROFILS[profil] || 'Quelqu’un';
+  const t = { de: who, o: r.o, d: r.d, date: r.date, dep: r.dep || '', train: r.train || '', voiture: r.voiture || '', place: r.place || '' };
+  const url = `${location.origin}${location.pathname}?partage=${b64e(JSON.stringify(t))}#resas`;
+  const text = `${who} partage son trajet : ${E.pretty(r.o)} → ${E.pretty(r.d)}, ${E.frDay(r.date)}${r.dep ? ` à ${r.dep}` : ''}${r.train ? `, train ${r.train}` : ''}${r.voiture ? `, voiture ${r.voiture}` : ''}${r.place ? `, place ${r.place}` : ''}.`;
+  try {
+    if (navigator.share) { await navigator.share({ title: 'Mon trajet', text, url }); return; }
+    await navigator.clipboard.writeText(`${text}\n${url}`);
+    toast('Lien copié : envoie-le à qui tu veux');
+  } catch (e) { if (e?.name !== 'AbortError') toast('Partage impossible sur ce téléphone'); }
+}
+function receiveShare() {
+  const p = new URLSearchParams(location.search);
+  const raw = p.get('partage');
+  if (!raw) return;
+  history.replaceState(null, '', location.pathname + location.hash);
+  try {
+    const t = JSON.parse(b64d(raw));
+    if (!t.o || !t.d || !t.date) throw new Error('incomplet');
+    const k = [t.de, t.o, t.d, t.date, t.dep, t.train].join('|');
+    if (!S.partages.some(x => x.k === k)) S.partages.push({ ...t, k });
+    S.partages.sort((a, b) => a.date.localeCompare(b.date) || (a.dep || '').localeCompare(b.dep || ''));
+    store.set('partages', S.partages);
+    location.hash = '#resas';
+    setTimeout(() => toast(`Trajet de ${t.de} ajouté`), 300);
+  } catch { toast('Ce lien de trajet est illisible'); }
+}
+function renderShared() {
+  const el = $('#r-shared');
+  const list = S.partages.filter(t => t.date >= E.parisDay());
+  el.hidden = !list.length;
+  if (!list.length) return;
+  el.innerHTML = `<h2>Trajets partagés avec toi</h2>${list.map(t => `<div class="resa">
+      <div class="l1"><span class="when">${esc(E.frDay(t.date))}${t.dep ? ` ${esc(t.dep)}` : ''}</span><span class="pill confirmee">${esc(t.de)}</span></div>
+      <div class="small">${P(t.o)} → ${P(t.d)}${t.train ? ` <span class="muted">train ${esc(t.train)}</span>` : ''}${seat(t)}</div>
+      <div class="actions"><button class="btn ghost small" data-r="unshare" data-id="${esc(t.k)}">Retirer</button></div></div>`).join('')}
+    <p class="note">Ces trajets ne comptent pas dans tes 6 réservations.</p>`;
+}
+
+/* ---------- actualiser : relit la publication SNCF du jour ---------- */
+async function refreshNow() {
+  const before = S.apiMeta?.at || null;
+  $('#fresh-t').textContent = 'Vérification…';
+  S.cache.clear();
+  S.apiMeta = null;
+  const at = await freshness();
+  if (!$('#tab-trajet').hidden && T.last) analyse();
+  toast(at && before && at !== before ? 'Nouvelles données SNCF chargées'
+    : 'Déjà à jour : la SNCF publie une fois par jour, vers 6 h 30. Pour le temps réel, vérifie sur SNCF Connect.');
 }
 
 function icsForResas() {
@@ -1033,7 +1170,7 @@ async function renderSuivi() {
     : '<p class="lead">Pas encore de relevé. Le robot passe chaque matin après la publication SNCF ; reviens demain.</p>'}
     ${repo ? `<div class="actions"><a class="btn quiet small" href="${repo.actions}" target="_blank" rel="noopener">Voir le robot sur GitHub</a></div>` : ''}`;
 
-  const rules = S.config.alertes || [];
+  const rules = (S.config.alertes || []).filter(r => !r.pour || r.pour === profil);
   const arrival = a => (a[0] > '00:00' ? `arrivée ${a[0]}–${a[1]}` : a[1] === '23:59' ? 'arrivée avant minuit' : `arrivée avant ${a[1]}`);
   const leg = (j, h, a) => [j?.length ? j.join(', ') : 'tous les jours', h?.length === 2 ? `départ ${h[0]}–${h[1]}` : 'toute la journée', a?.length === 2 ? arrival(a) : null].filter(Boolean).join(', ');
   const desc = r => {
@@ -1069,8 +1206,8 @@ async function renderSuivi() {
   }
 
   $('#s-about').innerHTML = `<h2>À propos</h2>
-    <p class="small">Aiguillage lit le jeu de données ouvert « tgvmax » de SNCF Voyageurs (data.sncf.com), publié une fois par jour : un départ y est ouvert ou fermé, sans nombre de places. Les disponibilités sont indicatives ; la vérité est sur SNCF Connect au moment où tu réserves.</p>
-    <p class="small">Aiguillage ne réserve rien à ta place et ne se connecte pas à ton compte : les CGV de SNCF Connect interdisent les robots de réservation. Il t’aide à décider vite et au bon moment.</p>
+    <p class="small">FloRob’ot lit le jeu de données ouvert « tgvmax » de SNCF Voyageurs (data.sncf.com), publié une fois par jour : un départ y est ouvert ou fermé, sans nombre de places. Les disponibilités sont indicatives ; la vérité est sur SNCF Connect au moment où tu réserves.</p>
+    <p class="small">L’app ne réserve rien à ta place et ne se connecte pas à ton compte : les CGV de SNCF Connect interdisent les robots de réservation. Il t’aide à décider vite et au bon moment.</p>
     <p class="small muted">Données : SNCF Voyageurs, <a href="https://data.sncf.com/pages/licence" target="_blank" rel="noopener">licence open data SNCF</a>. Projet indépendant, non affilié à la SNCF.</p>`;
 }
 
@@ -1078,6 +1215,7 @@ function buildAlert() {
   const o = B.po.get(), d = B.pd.get();
   if (!o || !d) { toast('Choisis les deux gares dans la liste'); return; }
   const rule = { nom: `${E.pretty(o)} → ${E.pretty(d)}${B.jours.size ? ` (${[...B.jours].join(', ')})` : ''}`, de: [o], vers: [d], sens: B.sens };
+  if (profil) rule.pour = profil;
   if (B.jours.size) rule.jours = E.WEEKDAYS.filter(w => B.jours.has(w));
   rule.heures = [$('#a-h1').value || '00:00', $('#a-h2').value || '23:59'];
   if (B.sens === 'aller-retour') rule.heures_retour = [$('#a-r1').value || '00:00', $('#a-r2').value || '23:59'];
@@ -1093,13 +1231,14 @@ function buildAlert() {
 /* ================= démarrage ================= */
 
 async function freshness() {
-  const el = $('#fresh');
+  const el = $('#fresh-t');
   try {
     const m = await apiMeta();
     if (!m.at) throw new Error();
     const d = new Date(m.at), day = E.parisDay(d), today = E.parisDay();
     const when = day === today ? 'ce matin' : day === E.addDays(today, -1) ? 'hier' : E.frDay(day);
     el.textContent = `Données ${when}, ${E.fmtMin(E.parisMinutes(d))}`;
+    return m.at;
   } catch {
     await histReady;
     const last = S.hist.meta?.snaps?.at(-1);
@@ -1119,11 +1258,13 @@ function fromUrl() {
 }
 
 async function main() {
+  initProfil();
+  receiveShare();
   initTrajet();
   initExplorer();
   initResas();
   $('#t-out').addEventListener('click', onTrajetClick);
-  $('#fresh').addEventListener('click', () => { location.hash = '#suivi'; });
+  $('#fresh').addEventListener('click', refreshNow);
   window.addEventListener('hashchange', showTab);
   showTab();
   freshness();
