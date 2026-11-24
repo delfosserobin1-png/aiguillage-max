@@ -140,3 +140,32 @@ test('gares voisines', () => {
   assert.deepEqual(E.nearbyStations('LYON (intramuros)', all), ['LYON ST EXUPERY TGV']);
   assert.deepEqual(E.nearbyStations('MARSEILLE ST CHARLES', all), ['AIX EN PROVENCE TGV']);
 });
+
+test('bilan annuel : résumé compact d’une date et série par créneau', () => {
+  const date = '2026-12-20';
+  const snaps = Array.from({ length: 31 }, (_, i) => ({ i, day: E.addDays('2026-11-20', i) }));
+  const dayByIdx = new Map(snaps.map(s => [s.i, s.day]));
+  // A : fermé à J-30, ouvert de J-29 à J-21, fermé ensuite, rouvert la veille
+  const sA = '0' + '1'.repeat(9) + '0'.repeat(19) + '11';
+  const eA = ['FRPLY', 'FRLPD', '18:00', '19:56', '6625', 0, sA];
+  const eB = ['FRPLY', 'FRLPD', '19:00', '20:56', '6627', 0, '0'.repeat(31)];
+  const rec = E.summarizeDate([eA, eB], date, dayByIdx);
+  assert.equal(rec[0], 15);
+  assert.equal(rec[1], '1800b19000');
+  const d = E.decodeSummary(rec);
+  assert.deepEqual(d.deps.map(x => [x.depMin, x.f]), [[1080, 11], [1140, 0]]);
+
+  const files = [{ x: {}, y: { [date]: rec } }];
+  const all = E.yearSeries(files, snaps, 0, 1439, '2026-12-25');
+  assert.equal(all.length, 1);
+  assert.deepEqual([all[0].n, all[0].ever, all[0].open, all[0].j7, all[0].j1], [2, 1, 1, 0, 1]);
+  assert.equal(E.yearRate(all[0], 'ever'), 0.5);
+  const late = E.yearSeries(files, snaps, E.toMin('18:30'), 1439, '2026-12-25');
+  assert.deepEqual([late[0].n, late[0].ever], [1, 0]);
+
+  // date encore en cours : calculée depuis le détail, marquée « partielle »
+  const live = E.yearSeries([{ x: { [date]: [eA] }, y: {} }], snaps.slice(0, 12), 0, 1439, '2026-12-01');
+  assert.equal(live[0].partial, true);
+  assert.equal(live[0].known & E.YF.j7, 0);
+  assert.equal(E.groupRates(live, 'ever', a => a.date.slice(0, 7)).size, 0);
+});
