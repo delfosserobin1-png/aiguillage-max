@@ -1,4 +1,4 @@
-name: Robot Aiguillage
+name: "FloRob'ot"
 
 # La SNCF publie le jeu « tgvmax » une fois par jour, en général vers 4 h 20 UTC.
 # Le robot vérifie souvent le matin (les tâches planifiées GitHub prennent parfois du retard),
@@ -51,6 +51,7 @@ jobs:
         continue-on-error: true
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_TOPIC_FLO: ${{ secrets.NTFY_TOPIC_FLO }}
           NTFY_SERVER: ${{ vars.NTFY_SERVER }}
         run: |
           export APP_URL="https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}/"
@@ -73,6 +74,13 @@ jobs:
           mkdir -p _site/data
           cp -r app/. _site/
           cp config.json _site/config.json
+          # icônes PNG dessinées à partir de app/icon.svg (sinon on garde celles du dépôt)
+          for s in 512 192; do
+            printf '<html><body style="margin:0;background:#0e1a33"><img src="icon.svg" width="%s" height="%s" style="display:block"></body></html>' $s $s > _site/_icone.html
+            google-chrome --headless=new --no-sandbox --disable-gpu --hide-scrollbars --window-size=$s,$s \
+              --screenshot="$PWD/_site/icon-$s.png" "file://$PWD/_site/_icone.html" >/dev/null 2>&1 || echo "icône $s non régénérée"
+          done
+          rm -f _site/_icone.html
           if [ -d state/public ]; then cp -r state/public/. _site/data/; fi
           echo "{\"commit\":\"${GITHUB_SHA::7}\",\"built\":\"$(date -u +%FT%TZ)\"}" > _site/version.json
 
