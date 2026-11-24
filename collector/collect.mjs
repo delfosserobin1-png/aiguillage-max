@@ -212,13 +212,20 @@ async function ntfy(msg) {
   } catch (e) { log(`ntfy injoignable : ${e.message}`); return false; }
 }
 
-const line = (ch) => `${E.frDay(ch.x.date)} ${ch.x.dep}→${ch.x.arr} (J-${ch.J})`;
-function deepLink(rule, sens, date) {
+// règle à plusieurs gares d'un côté : chaque ligne dit laquelle
+function where(ch, rule) {
+  const manyDe = (rule.de?.length || 0) > 1, manyVers = (rule.vers?.length || 0) > 1;
+  if (manyDe && manyVers) return ` ${E.pretty(ch.x.o)} → ${E.pretty(ch.x.d)}`;
+  const back = ch.sens === 'retour';
+  if (manyVers) return back ? ` depuis ${E.pretty(ch.x.o)}` : ` vers ${E.pretty(ch.x.d)}`;
+  if (manyDe) return back ? ` vers ${E.pretty(ch.x.d)}` : ` depuis ${E.pretty(ch.x.o)}`;
+  return '';
+}
+const line = (ch, rule) => `${E.frDay(ch.x.date)} ${ch.x.dep}→${ch.x.arr}${where(ch, rule)} (J-${ch.J})`;
+function deepLink(rule, ch) {
   if (!APP_URL) return '';
-  const o = sens === 'retour' ? rule.vers?.[0] : rule.de?.[0];
-  const d = sens === 'retour' ? rule.de?.[0] : rule.vers?.[0];
-  const p = new URLSearchParams({ o: o || '', d: d || '', date });
-  const h = sens === 'retour' && rule.heures_retour ? rule.heures_retour : rule.heures;
+  const p = new URLSearchParams({ o: ch.x.o, d: ch.x.d, date: ch.x.date });
+  const h = ch.sens === 'retour' && rule.heures_retour ? rule.heures_retour : rule.heures;
   if (h?.length === 2) { p.set('from', h[0]); p.set('to', h[1]); }
   return `${APP_URL}?${p}#trajet`;
 }
@@ -233,8 +240,8 @@ async function sendAlerts(rules, changes, openNowByRule) {
     if (!opens.length && !(notifyClose && closes.length)) continue;
     const name = rule.nom || `${E.pretty(rule.de?.[0] || '?')} → ${E.pretty(rule.vers?.[0] || '?')}`;
     const parts = [];
-    if (opens.length) parts.push(`🟢 **${opens.length} ouverture${opens.length > 1 ? 's' : ''}**\n` + opens.slice(0, 12).map(c => `- ${c.sens === 'retour' ? '↩︎ ' : ''}${line(c)}`).join('\n') + (opens.length > 12 ? `\n- … et ${opens.length - 12} autres` : ''));
-    if (notifyClose && closes.length) parts.push(`🔴 **${closes.length} fermeture${closes.length > 1 ? 's' : ''}**\n` + closes.slice(0, 8).map(c => `- ${c.sens === 'retour' ? '↩︎ ' : ''}${line(c)}`).join('\n') + (closes.length > 8 ? `\n- … et ${closes.length - 8} autres` : ''));
+    if (opens.length) parts.push(`🟢 **${opens.length} ouverture${opens.length > 1 ? 's' : ''}**\n` + opens.slice(0, 12).map(c => `- ${c.sens === 'retour' ? '↩︎ ' : ''}${line(c, rule)}`).join('\n') + (opens.length > 12 ? `\n- … et ${opens.length - 12} autres` : ''));
+    if (notifyClose && closes.length) parts.push(`🔴 **${closes.length} fermeture${closes.length > 1 ? 's' : ''}**\n` + closes.slice(0, 8).map(c => `- ${c.sens === 'retour' ? '↩︎ ' : ''}${line(c, rule)}`).join('\n') + (closes.length > 8 ? `\n- … et ${closes.length - 8} autres` : ''));
     const now = openNowByRule[i];
     parts.push(`Ouverts en ce moment : ${now.open} départ${now.open > 1 ? 's' : ''} sur ${now.total}.`);
     const first = opens[0] || closes[0];
@@ -243,7 +250,7 @@ async function sendAlerts(rules, changes, openNowByRule) {
       message: parts.join('\n\n').slice(0, 3900),
       tags: [opens.length ? 'green_circle' : 'red_circle', 'train'],
       priority: opens.length ? 4 : 2,
-      click: deepLink(rule, first.sens, first.x.date) || undefined,
+      click: deepLink(rule, first) || undefined,
     });
     if (ok) sent++;
   }
