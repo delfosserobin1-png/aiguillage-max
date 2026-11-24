@@ -1,14 +1,83 @@
 {
-  "alertes": [],
+  "alertes": [
+    {
+      "nom": "Paris ↔ Lyon",
+      "de": ["PARIS (intramuros)"],
+      "vers": ["LYON (intramuros)"],
+      "sens": "aller-retour",
+      "jours": ["jeu", "ven"],
+      "heures": ["19:30", "23:59"],
+      "jours_retour": ["dim"],
+      "heures_retour": ["12:00", "23:59"],
+      "arrivee_retour": ["00:00", "20:15"],
+      "fermetures": false,
+      "note": "Retour à Paris avant 20 h 15 pour attraper le TGV de 20 h 56 vers Vendôme ; vers Blois, prévois plus tôt."
+    },
+    {
+      "nom": "Saint-Pierre-des-Corps ↔ Lyon",
+      "de": ["ST PIERRE DES CORPS"],
+      "vers": ["LYON (intramuros)"],
+      "sens": "aller-retour",
+      "jours": ["jeu", "ven"],
+      "heures": ["18:30", "23:59"],
+      "jours_retour": ["dim"],
+      "heures_retour": ["12:00", "23:59"],
+      "arrivee_retour": ["00:00", "21:55"],
+      "fermetures": false,
+      "note": "Sans passer par Paris. Retour avant 21 h 55 pour le dernier TER vers Blois, avant 21 h 10 pour le TGV de Vendôme."
+    },
+    {
+      "nom": "Paris ↔ Marseille / Aix TGV",
+      "de": ["PARIS (intramuros)"],
+      "vers": ["MARSEILLE ST CHARLES", "AIX EN PROVENCE TGV"],
+      "sens": "aller-retour",
+      "jours": ["jeu", "ven"],
+      "heures": ["19:30", "23:59"],
+      "jours_retour": ["dim"],
+      "heures_retour": ["12:00", "23:59"],
+      "arrivee_retour": ["00:00", "20:15"],
+      "fermetures": false,
+      "note": "Aix TGV inclus (navette pour Marseille). Retour à Paris avant 20 h 15, comme pour Lyon."
+    },
+    {
+      "nom": "Paris ↔ Vannes",
+      "de": ["PARIS (intramuros)"],
+      "vers": ["VANNES"],
+      "sens": "aller-retour",
+      "jours": ["jeu", "ven"],
+      "heures": ["19:30", "23:59"],
+      "jours_retour": ["dim"],
+      "heures_retour": ["12:00", "23:59"],
+      "arrivee_retour": ["00:00", "20:30"],
+      "fermetures": false,
+      "note": "Retour à Montparnasse avant 20 h 30 : le TGV de 20 h 56 vers Vendôme part de la même gare."
+    },
+    {
+      "nom": "Saint-Pierre-des-Corps ↔ Saumur",
+      "de": ["ST PIERRE DES CORPS"],
+      "vers": ["SAUMUR"],
+      "sens": "aller-retour",
+      "jours": ["jeu", "ven"],
+      "heures": ["18:30", "23:59"],
+      "jours_retour": ["dim"],
+      "heures_retour": ["12:00", "23:59"],
+      "arrivee_retour": ["00:00", "21:55"],
+      "fermetures": false,
+      "note": "Aucun train MAX entre Paris et Saumur : il passe par Saint-Pierre-des-Corps."
+    }
+  ],
   "exemple": {
-    "nom": "Paris → Lyon, le vendredi soir",
+    "nom": "Paris ↔ Lyon, le week-end",
     "de": ["PARIS (intramuros)"],
     "vers": ["LYON (intramuros)"],
     "sens": "aller-retour",
-    "jours": ["ven", "dim"],
+    "jours": ["ven"],
     "heures": ["17:00", "21:00"],
-    "heures_retour": ["15:00", "22:00"],
+    "jours_retour": ["dim"],
+    "heures_retour": ["15:00", "23:59"],
+    "arrivee_retour": ["00:00", "23:59"],
     "dates": ["2026-12-01", "2027-01-31"],
-    "fermetures": true
+    "fermetures": true,
+    "note": "Texte libre, affiché dans l'onglet Suivi."
   }
 }
