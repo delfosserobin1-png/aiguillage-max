@@ -593,16 +593,26 @@ export function parseDays(list) {
   if (!list || !list.length) return null;
   return new Set(list.map(v => typeof v === 'number' ? v : DAY_NAMES[fold(v).toLowerCase()] || +v).filter(n => n >= 1 && n <= 7));
 }
-/** Une règle d'alerte s'applique-t-elle à ce départ ? (sens = 'aller' ou 'retour' pour un aller-retour) */
+/**
+ * Une règle d'alerte s'applique-t-elle à ce départ ? Renvoie 'aller', 'retour' ou false.
+ * Au retour, jours_retour, heures_retour et arrivee_retour remplacent jours, heures et arrivee quand ils sont donnés.
+ * heures = fenêtre de départ, arrivee = fenêtre d'arrivée ; une arrivée après minuit compte après 23:59.
+ */
 export function ruleMatches(rule, x) {
   const de = (rule.de || []).map(fold), vers = (rule.vers || []).map(fold);
   const fwd = (de.includes(fold(x.o)) || de.includes(fold(x.oi))) && (vers.includes(fold(x.d)) || vers.includes(fold(x.di)));
-  const back = /retour/.test(rule.sens || '') && (vers.includes(fold(x.o)) || vers.includes(fold(x.oi))) && (de.includes(fold(x.d)) || de.includes(fold(x.di)));
+  const back = !fwd && /retour/.test(rule.sens || '') && (vers.includes(fold(x.o)) || vers.includes(fold(x.oi))) && (de.includes(fold(x.d)) || de.includes(fold(x.di)));
   if (!fwd && !back) return false;
-  const days = parseDays(rule.jours);
+  const pick = k => (back && rule[k + '_retour'] ? rule[k + '_retour'] : rule[k]);
+  const days = parseDays(pick('jours'));
   if (days && !days.has(isoWeekday(x.date))) return false;
-  const h = back && rule.heures_retour ? rule.heures_retour : rule.heures;
+  const h = pick('heures');
   if (h && h.length === 2 && (x.depMin < toMin(h[0]) || x.depMin > toMin(h[1]))) return false;
+  const a = pick('arrivee');
+  if (a && a.length === 2) {
+    const arr = x.arrMin + (x.night ? 1440 : 0);
+    if (arr < toMin(a[0]) || arr > toMin(a[1])) return false;
+  }
   if (rule.dates && rule.dates.length === 2 && (x.date < rule.dates[0] || x.date > rule.dates[1])) return false;
   return fwd ? 'aller' : 'retour';
 }
