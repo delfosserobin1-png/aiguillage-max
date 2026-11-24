@@ -1,4 +1,4 @@
-name: "FloRob'ot"
+name: FloRoBot
 
 # La SNCF publie le jeu « tgvmax » une fois par jour, en général vers 4 h 20 UTC.
 # Le robot vérifie souvent le matin (les tâches planifiées GitHub prennent parfois du retard),
