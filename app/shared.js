@@ -502,18 +502,21 @@ export function radarStats(deps, today) {
 /* ---------- explorer : où partir ? ---------- */
 
 export function exploreDestinations(outDeps, retDeps, q) {
-  const inWin = (x, f, t) => x.depMin >= toMin(f || '00:00') && x.depMin <= toMin(t || '23:59');
+  // créneaux : liste de [début, fin] (outWins / retWins), ou un seul créneau outFrom–outTo / retFrom–retTo
+  const wins = (w, f, t) => (w?.length ? w : [[f || '00:00', t || '23:59']]).map(([a, b]) => [toMin(a), toMin(b)]);
+  const ow = wins(q.outWins, q.outFrom, q.outTo), rw = wins(q.retWins, q.retFrom, q.retTo);
+  const inAny = (x, ws) => ws.some(([a, b]) => x.depMin >= a && x.depMin <= b);
   const from = new Set(q.from);
   const map = new Map();
   for (const x of outDeps) {
-    if (!x.ok || !from.has(x.o) || from.has(x.d) || !inWin(x, q.outFrom, q.outTo)) continue;
+    if (!x.ok || !from.has(x.o) || from.has(x.d) || !inAny(x, ow)) continue;
     if (q.outDates && !q.outDates.includes(x.date)) continue;
     if (!map.has(x.d)) map.set(x.d, { city: x.d, out: [], ret: [] });
     map.get(x.d).out.push(x);
   }
   if (q.withReturn) {
     for (const x of retDeps) {
-      if (!x.ok || !from.has(x.d) || !map.has(x.o) || !inWin(x, q.retFrom, q.retTo)) continue;
+      if (!x.ok || !from.has(x.d) || !map.has(x.o) || !inAny(x, rw)) continue;
       if (q.retDates && !q.retDates.includes(x.date)) continue;
       map.get(x.o).ret.push(x);
     }
