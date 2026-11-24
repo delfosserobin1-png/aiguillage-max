@@ -31,6 +31,25 @@ function chooseProfil(p) {
   } catch { /* stockage indisponible */ }
   location.reload();
 }
+/* Pause d'un compte, réglée dans config.json : "pause": { "flo": { "jusqua": "<date ISO>", "titre": "…", "message": "…" } }.
+   L'écran couvre tous les onglets jusqu'à l'heure dite, puis l'app se recharge toute seule. */
+async function checkPause() {
+  if (!profil) return;
+  let p;
+  try { p = (await fetch(`config.json?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.json())).pause?.[profil]; } catch { return; }
+  const end = Date.parse(p?.jusqua || '');
+  if (!(end > Date.now())) return;
+  const d = new Date(end), day = E.parisDay(d), today = E.parisDay(), hour = E.fmtMin(E.parisMinutes(d));
+  const when = day === today ? `à ${hour}` : day === E.addDays(today, 1) ? `demain à ${hour}` : `le ${E.frDay(day)} à ${hour}`;
+  const el = document.createElement('div');
+  el.className = 'who-pick';
+  el.setAttribute('role', 'alertdialog');
+  el.setAttribute('aria-modal', 'true');
+  el.innerHTML = `<h2>${esc(p.titre || 'Pause')}</h2>${p.message ? `<p>${esc(p.message)}</p>` : ''}`
+    + `<p style="color:#fff;opacity:.65;font-size:13px">L’app revient ${esc(when)}.</p>`;
+  document.body.append(el);
+  if (end - Date.now() < 864e5) setTimeout(() => location.reload(), end - Date.now() + 2000);
+}
 function initProfil() {
   $$('.brand .who').forEach(b => {
     const on = b.dataset.p === profil;
@@ -1259,6 +1278,7 @@ function fromUrl() {
 
 async function main() {
   initProfil();
+  checkPause();
   receiveShare();
   initTrajet();
   initExplorer();
