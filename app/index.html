@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aiguillage — quotas et stratégie MAX JEUNE</title>
+<meta name="description" content="Quotas MAX JEUNE, historique et meilleure stratégie de réservation, à partir de l'open data SNCF.">
+<meta name="theme-color" content="#0e1a33">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#ffc845" stroke-width="2.3" stroke-linecap="round" aria-hidden="true"><path d="M8 22V2"/><path d="M8 15.5c0-5.5 4-9 10.5-12"/><circle cx="8" cy="15.5" r="2.2" fill="#ffc845" stroke="none"/></svg>
+    <span>Aiguillage</span>
+  </div>
+  <button class="fresh" id="fresh" type="button">Données SNCF…</button>
+</header>
+
+<main>
+  <!-- ===== Trajet ===== -->
+  <section id="tab-trajet" class="tab-page" aria-label="Trajet">
+    <div class="chips" id="t-recent" hidden></div>
+    <form class="card form" id="f-trajet" autocomplete="off" novalidate>
+      <div class="odgrid">
+        <div class="field picker" id="p-o"><label for="t-o">De</label><input id="t-o" type="text" placeholder="Gare de départ" enterkeyhint="next" spellcheck="false"><ul class="sugg" role="listbox" hidden></ul></div>
+        <button type="button" class="swap" id="t-swap" aria-label="Inverser départ et arrivée">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"/></svg>
+        </button>
+        <div class="field picker" id="p-d"><label for="t-d">Vers</label><input id="t-d" type="text" placeholder="Gare d'arrivée" enterkeyhint="next" spellcheck="false"><ul class="sugg" role="listbox" hidden></ul></div>
+      </div>
+      <div class="field"><label for="t-date">Date du voyage</label><input type="date" id="t-date"></div>
+      <div class="field">
+        <span class="label">Créneau de départ</span>
+        <div class="chips" id="t-slots"></div>
+        <div class="grid2"><input type="time" id="t-from" aria-label="Partir après"><input type="time" id="t-to" aria-label="Partir avant"></div>
+      </div>
+      <div class="field">
+        <span class="label">Ce que tu acceptes</span>
+        <div class="chips" id="t-flex">
+          <button type="button" class="chip" data-flex="h1">± 1 h</button>
+          <button type="button" class="chip" data-flex="h2">± 2 h</button>
+          <button type="button" class="chip" data-flex="day">± 1 jour</button>
+          <button type="button" class="chip" data-flex="alt">Gares voisines</button>
+          <button type="button" class="chip" data-flex="conn">Correspondances</button>
+          <button type="button" class="chip" data-flex="split">2 billets, même train</button>
+          <button type="button" class="chip warn" data-flex="extend">Billet prolongé</button>
+        </div>
+        <div id="t-alts" hidden></div>
+        <p class="note" id="t-extend-note" hidden>Billet prolongé : tu réserves jusqu'à une gare plus loin sur le même train et tu descends avant. Vérifie les conditions de vente SNCF avant de t'en servir.</p>
+      </div>
+      <button class="btn block" type="submit" id="t-go">Analyser ce trajet</button>
+    </form>
+    <div id="t-out" class="tab-page"></div>
+  </section>
+
+  <!-- ===== Explorer ===== -->
+  <section id="tab-explorer" class="tab-page" aria-label="Explorer" hidden>
+    <form class="card form" id="f-exp" autocomplete="off" novalidate>
+      <h2>Où partir à 0 € ?</h2>
+      <div class="field picker" id="p-e"><label for="e-o">Depuis</label><input id="e-o" type="text" placeholder="Ta gare" spellcheck="false"><ul class="sugg" role="listbox" hidden></ul></div>
+      <div class="field"><span class="label">Quand</span><div class="chips" id="e-when"></div></div>
+      <div class="grid2" id="e-dates" hidden>
+        <div class="field"><label for="e-d1">Aller le</label><input type="date" id="e-d1"></div>
+        <div class="field"><label for="e-d2">Retour le</label><input type="date" id="e-d2"></div>
+      </div>
+      <div class="field"><span class="label">Départ de l'aller</span><div class="chips" id="e-outslots"></div></div>
+      <div class="field">
+        <label class="label"><input type="checkbox" id="e-ret" checked> Avec un retour à 0 €</label>
+        <div class="chips" id="e-retslots"></div>
+      </div>
+      <button class="btn block" type="submit">Voir les destinations</button>
+    </form>
+    <div id="e-out" class="tab-page"></div>
+  </section>
+
+  <!-- ===== Mes résas ===== -->
+  <section id="tab-resas" class="tab-page" aria-label="Mes réservations" hidden>
+    <div class="card" id="r-counter"></div>
+    <div class="card" id="r-list"></div>
+    <details class="card more" id="r-add">
+      <summary>Ajouter une réservation à la main</summary>
+      <form class="form" id="f-resa" autocomplete="off" novalidate>
+        <div class="field picker" id="p-ro"><label for="r-o">De</label><input id="r-o" type="text" placeholder="Gare de départ" spellcheck="false"><ul class="sugg" role="listbox" hidden></ul></div>
+        <div class="field picker" id="p-rd"><label for="r-d">Vers</label><input id="r-d" type="text" placeholder="Gare d'arrivée" spellcheck="false"><ul class="sugg" role="listbox" hidden></ul></div>
+        <div class="grid2">
+          <div class="field"><label for="r-date">Date</label><input type="date" id="r-date"></div>
+          <div class="field"><label for="r-dep">Départ</label><input type="time" id="r-dep"></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="r-train">N° de train</label><input type="text" id="r-train" inputmode="numeric" placeholder="6617"></div>
+          <div class="field"><label for="r-tarif">Tarif</label><select id="r-tarif"><option value="max">0 € (MAX)</option><option value="avantage">-30 % (MAX AVANTAGE)</option></select></div>
+        </div>
+        <button class="btn block" type="submit">Ajouter</button>
+      </form>
+    </details>
+    <div class="card" id="r-rules"></div>
+  </section>
+
+  <!-- ===== Suivi ===== -->
+  <section id="tab-suivi" class="tab-page" aria-label="Suivi" hidden>
+    <div class="card" id="s-robot"></div>
+    <div class="card" id="s-alerts"></div>
+    <div class="card" id="s-builder"></div>
+    <div class="card" id="s-about"></div>
+  </section>
+</main>
+
+<nav class="tabs" aria-label="Onglets">
+  <a href="#trajet" data-tab="trajet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/></svg>Trajet</a>
+  <a href="#explorer" data-tab="explorer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>Explorer</a>
+  <a href="#resas" data-tab="resas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M14 6v12" stroke-dasharray="2 2"/></svg>Mes résas</a>
+  <a href="#suivi" data-tab="suivi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9z"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></svg>Suivi</a>
+</nav>
+<div id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

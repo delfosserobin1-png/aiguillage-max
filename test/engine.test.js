@@ -1,0 +1,142 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import * as E from '../app/shared.js';
+
+const row = (o, d, dep, arr, ok, train, date = '2026-12-04', oi, di) => ({
+  date, train_no: train, origine: o, destination: d, origine_iata: oi || o.slice(0, 5), destination_iata: di || d.slice(0, 5),
+  heure_depart: dep, heure_arrivee: arr, od_happy_card: ok ? 'OUI' : 'NON', axe: 'SUD EST',
+});
+
+test('replie les deux rames d’un même départ et garde « ouvert » si une rame l’est', () => {
+  const deps = E.normalizeRows([row('PARIS', 'LYON', '18:00', '19:56', false, 6625), row('PARIS', 'LYON', '18:00', '19:56', true, 6675)]);
+  assert.equal(deps.length, 1);
+  assert.equal(deps[0].ok, true);
+  assert.deepEqual(deps[0].trains, ['6625', '6675']);
+  assert.equal(deps[0].dur, 116);
+});
+
+test('créneaux, tranches et jours de semaine', () => {
+  assert.equal(E.slotOf(E.toMin('08:59')), 0);
+  assert.equal(E.slotOf(E.toMin('17:00')), 4);
+  assert.equal(E.bucketOf(0), 0); assert.equal(E.bucketOf(3), 1); assert.equal(E.bucketOf(30), 5);
+  assert.equal(E.isoWeekday('2026-12-04'), 5);
+  assert.equal(E.diffDays('2026-12-04', '2026-11-24'), 10);
+});
+
+test('heure de Paris -> UTC, été comme hiver', () => {
+  assert.equal(E.parisToUTC('2026-12-04', '17:00').toISOString(), '2026-12-04T16:00:00.000Z');
+  assert.equal(E.parisToUTC('2026-07-04', '17:00').toISOString(), '2026-07-04T15:00:00.000Z');
+});
+
+test('échéances MAX : J-30, J-7, J-2, veille 17 h', () => {
+  const { list } = E.deadlinesFor('2026-12-04', '2026-11-24');
+  const by = Object.fromEntries(list.map(d => [d.id, d]));
+  assert.equal(by.ouverture.day, '2026-11-04');
+  assert.equal(by.remboursement.day, '2026-11-27');
+  assert.equal(by['confirmation-debut'].day, '2026-12-02');
+  assert.equal(by['confirmation-fin'].day, '2026-12-03');
+  assert.equal(by['confirmation-fin'].time, '17:00');
+});
+
+test('compteur, confirmation et règle « une réservation par jour et par ville »', () => {
+  const now = E.parisToUTC('2026-12-03', '10:00');
+  const resas = [
+    { id: 'a', o: 'PARIS (intramuros)', d: 'LYON (intramuros)', date: '2026-12-04', dep: '18:00', tarif: 'max', statut: 'active' },
+    { id: 'b', o: 'PARIS (intramuros)', d: 'LILLE (intramuros)', date: '2026-12-04', dep: '08:00', tarif: 'max', statut: 'active' },
+    { id: 'c', o: 'LYON (intramuros)', d: 'PARIS (intramuros)', date: '2026-12-20', dep: '18:00', tarif: 'max', statut: 'active' },
+    { id: 'd', o: 'LYON (intramuros)', d: 'PARIS (intramuros)', date: '2026-12-21', dep: '18:00', tarif: 'avantage', statut: 'active' },
+  ];
+  const st = E.checkResas(resas, now);
+  assert.equal(st.used, 3);
+  const a = st.list.find(r => r.id === 'a');
+  assert.equal(a.etat, 'urgent');
+  assert.equal(a.conflits.length, 1);
+  assert.equal(st.list.find(r => r.id === 'c').etat, 'attente');
+  assert.equal(st.list.find(r => r.id === 'd').etat, 'payant');
+  const late = E.checkResas(resas, E.parisToUTC('2026-12-03', '17:30'));
+  assert.equal(late.list.find(r => r.id === 'a').etat, 'expiree');
+});
+
+test('stratégie : direct ouvert = réserver ; sinon correspondance, découpage et billet prolongé', () => {
+  const today = '2026-11-24';
+  const D = '2026-12-04';
+  const rows = [
+    row('PARIS (intramuros)', 'LYON (intramuros)', '18:00', '19:56', false, 6625, D, 'FRPLY', 'FRLPD'),
+    row('PARIS (intramuros)', 'VALENCE TGV', '18:00', '20:10', true, 6625, D, 'FRPLY', 'FRVAF'),
+    row('PARIS (intramuros)', 'DIJON VILLE', '17:45', '19:22', true, 6701, D, 'FRPLY', 'FRDIJ'),
+    row('DIJON VILLE', 'LYON (intramuros)', '20:00', '21:40', true, 6801, D, 'FRDIJ', 'FRLPD'),
+    row('PARIS (intramuros)', 'MACON LOCHE TGV', '17:30', '19:05', true, 6611, D, 'FRPLY', 'FRMLT'),
+    row('MACON LOCHE TGV', 'LYON (intramuros)', '19:07', '19:40', true, 6611, D, 'FRMLT', 'FRLPD'),
+    row('PARIS (intramuros)', 'LYON (intramuros)', '17:30', '19:40', false, 6611, D, 'FRPLY', 'FRLPD'),
+  ];
+  const deps = E.normalizeRows(rows);
+  const q = { o: ['PARIS (intramuros)'], d: ['LYON (intramuros)'], oAlt: [], dAlt: [], date: D, from: '17:00', to: '20:00',
+    flexH: 0, allowConn: true, allowSplit: true, allowExtend: true };
+  const data = { direct: deps, fromO: deps, toD: deps };
+  const plan = E.buildPlan(q, data, { today, nowMin: 600 });
+  assert.equal(plan.verdict.code, 'compromis');
+  const kinds = plan.free.map(o => o.kind);
+  assert.ok(kinds.includes('split'), 'découpage du 6611 à Mâcon');
+  assert.ok(kinds.includes('connection'), 'correspondance à Dijon');
+  assert.ok(kinds.includes('extend'), 'billet prolongé jusqu’à Valence');
+  const split = plan.free.find(o => o.kind === 'split');
+  assert.equal(split.slots, 2);
+  const conn = plan.free.find(o => o.kind === 'connection');
+  assert.equal(conn.wait, 38);
+  const ext = plan.free.find(o => o.kind === 'extend');
+  assert.equal(ext.getOff, 'LYON (intramuros)');
+
+  const open = E.normalizeRows([...rows, row('PARIS (intramuros)', 'LYON (intramuros)', '19:00', '20:56', true, 6627, D, 'FRPLY', 'FRLPD')]);
+  const plan2 = E.buildPlan(q, { direct: open, fromO: open, toD: open }, { today, nowMin: 600 });
+  assert.equal(plan2.verdict.code, 'reserver');
+  assert.equal(plan2.verdict.best.legs[0].dep, '19:00');
+
+  const early = E.buildPlan({ ...q, date: '2027-01-15' }, { direct: [] }, { today });
+  assert.equal(early.verdict.code, 'trop-tot');
+  assert.equal(early.verdict.openDay, '2026-12-16');
+});
+
+test('le compteur plein et le conflit de ville apparaissent dans les avertissements', () => {
+  const D = '2026-12-04';
+  const deps = E.normalizeRows([row('PARIS (intramuros)', 'LYON (intramuros)', '19:00', '20:56', true, 6627, D, 'FRPLY', 'FRLPD')]);
+  const resas = Array.from({ length: 6 }, (_, i) => ({ id: String(i), o: i ? 'NANTES' : 'PARIS (intramuros)', d: 'X', date: E.addDays(D, i === 0 ? 0 : i), tarif: 'max', statut: 'active' }));
+  const plan = E.buildPlan({ o: ['PARIS (intramuros)'], d: ['LYON (intramuros)'], date: D, from: '17:00', to: '21:00' }, { direct: deps }, { today: '2026-11-24', nowMin: 600, resas, now: E.parisToUTC('2026-11-24', '10:00') });
+  assert.equal(plan.verdict.code, 'reserver');
+  assert.ok(plan.warnings.some(w => w.kind === 'compteur'));
+  assert.ok(plan.warnings.some(w => w.kind === 'ville'));
+});
+
+test('probabilités : lissage vers le réseau quand le trajet manque de données', () => {
+  const globalC = { '5|4|2': [800, 100, 30, 300], '1|1|2': [500, 20, 10, 200] };
+  const sparse = { '5|4|2': [1, 0, 1, 0] };
+  const r = E.transitionRates(sparse, globalC, 5, 4, 2);
+  assert.ok(r.reopen > 0.05 && r.reopen < 0.5, `réouverture lissée ${r.reopen}`);
+  assert.ok(E.hasHistory(sparse, globalC));
+  const p = E.pReopen(5, 5, 4, sparse, globalC);
+  assert.ok(p > r.reopen && p < 1);
+  assert.equal(E.pReopen(0, 5, 4, sparse, globalC), 0);
+});
+
+test('fichier .ics valide (fins de ligne CRLF, lignes pliées à 75 octets)', () => {
+  const ics = E.buildICS([{ uid: 'x@y', start: new Date('2026-12-02T08:00:00Z'), title: 'Confirmer ma résa MAX Paris (intramuros) → Lyon (intramuros), très long titre pour tester le pliage', alarm: 0 }]);
+  assert.ok(ics.startsWith('BEGIN:VCALENDAR\r\n'));
+  assert.ok(ics.includes('DTSTART:20261202T080000Z'));
+  for (const l of ics.split('\r\n')) assert.ok(new TextEncoder().encode(l).length <= 75, l);
+});
+
+test('règles d’alerte : sens, jours, heures', () => {
+  const rule = { de: ['PARIS (intramuros)'], vers: ['LYON (intramuros)'], sens: 'aller-retour', jours: ['ven', 'dim'], heures: ['17:00', '21:00'], heures_retour: ['15:00', '22:00'] };
+  const [fri] = E.normalizeRows([row('PARIS (intramuros)', 'LYON (intramuros)', '18:00', '19:56', true, 1, '2026-12-04')]);
+  const [sunBack] = E.normalizeRows([row('LYON (intramuros)', 'PARIS (intramuros)', '21:30', '23:26', true, 2, '2026-12-06')]);
+  const [monday] = E.normalizeRows([row('PARIS (intramuros)', 'LYON (intramuros)', '18:00', '19:56', true, 3, '2026-12-07')]);
+  assert.equal(E.ruleMatches(rule, fri), 'aller');
+  assert.equal(E.ruleMatches(rule, sunBack), 'retour');
+  assert.equal(E.ruleMatches(rule, monday), false);
+});
+
+test('gares voisines', () => {
+  const all = ['PARIS (intramuros)', 'MASSY TGV', 'MARNE LA VALLEE CHESSY', 'LYON (intramuros)', 'LYON ST EXUPERY TGV', 'AIX EN PROVENCE TGV', 'MARSEILLE ST CHARLES'];
+  assert.deepEqual(E.nearbyStations('PARIS (intramuros)', all), ['MARNE LA VALLEE CHESSY', 'MASSY TGV']);
+  assert.deepEqual(E.nearbyStations('LYON (intramuros)', all), ['LYON ST EXUPERY TGV']);
+  assert.deepEqual(E.nearbyStations('MARSEILLE ST CHARLES', all), ['AIX EN PROVENCE TGV']);
+});
