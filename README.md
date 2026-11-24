@@ -1,6 +1,6 @@
-# Aiguillage — quotas et stratégie MAX JEUNE
+# Rob ↔ Flo — quotas et stratégie MAX JEUNE
 
-Aiguillage t'aide à décider **quoi réserver, et quand**, avec ton abonnement MAX JEUNE (ou MAX SENIOR).
+Rob ↔ Flo t'aide à décider **quoi réserver, et quand**, avec ton abonnement MAX JEUNE (ou MAX SENIOR).
 Il lit l'open data SNCF, garde l'historique des quotas de tout le réseau, et transforme tout ça en plan d'action.
 
 - **Trajet** : verdict immédiat (réserver maintenant, compromis, attendre ou payer), options à 0 € classées
@@ -11,7 +11,7 @@ Il lit l'open data SNCF, garde l'historique des quotas de tout le réseau, et tr
 - **Mes résas** : compteur des 6 réservations, rappels de confirmation, règle « une réservation par jour et par ville ».
 - **Suivi** : état du robot, alertes configurées, générateur d'alerte.
 
-Aiguillage **ne réserve rien à ta place** et ne se connecte jamais à ton compte SNCF :
+L'app **ne réserve rien à ta place** et ne se connecte jamais à ton compte SNCF :
 les conditions de SNCF Connect interdisent les robots de réservation. Il te prévient et te dit quoi faire ; tu cliques.
 
 ## Comment ça marche
@@ -19,7 +19,7 @@ les conditions de SNCF Connect interdisent les robots de réservation. Il te pr�
 ```
 SNCF open data (jeu « tgvmax », publié ~1×/jour vers 4 h 20 UTC)
         │
-        ├── GitHub Actions « Robot Aiguillage » (toutes les 30 min le matin, puis toutes les 3 h)
+        ├── GitHub Actions « FloRob'ot » (toutes les 30 min le matin, puis toutes les 3 h)
         │     ├─ s'arrête en quelques secondes si rien n'a changé
         │     ├─ met à jour l'historique de chaque trajet (branche `data`)
         │     ├─ envoie les alertes ntfy (config.json)
@@ -68,7 +68,8 @@ Tous les champs sauf `de` et `vers` sont facultatifs :
 - `heures` : fenêtre de départ ; `arrivee` : fenêtre d'arrivée (une arrivée après minuit compte après 23:59) ;
 - au retour, `jours_retour`, `heures_retour` et `arrivee_retour` remplacent `jours`, `heures` et `arrivee` ;
 - `fermetures: false` : seulement les ouvertures, pas les fermetures ;
-- `note` : un rappel pour toi, affiché dans l'onglet Suivi.
+- `note` : un rappel pour toi, affiché dans l'onglet Suivi ;
+- `pour` : `"rob"` ou `"flo"`. L'alerte n'apparaît que dans ce compte et part sur son canal ntfy (`NTFY_TOPIC` pour Rob, `NTFY_TOPIC_FLO` pour Flo). Sans `pour`, elle va à Rob.
 
 ## Ce que disent (et ne disent pas) les données
 
