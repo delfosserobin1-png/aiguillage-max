@@ -1,6 +1,7 @@
 {
   "alertes": [
     {
+      "pour": "rob",
       "nom": "Paris ↔ Lyon",
       "de": ["PARIS (intramuros)"],
       "vers": ["LYON (intramuros)"],
@@ -14,6 +15,7 @@
       "note": "Retour à Paris avant 20 h 15 pour attraper le TGV de 20 h 56 vers Vendôme ; vers Blois, prévois plus tôt."
     },
     {
+      "pour": "rob",
       "nom": "Saint-Pierre-des-Corps ↔ Lyon",
       "de": ["ST PIERRE DES CORPS"],
       "vers": ["LYON (intramuros)"],
@@ -27,6 +29,7 @@
       "note": "Sans passer par Paris. Retour avant 21 h 55 pour le dernier TER vers Blois, avant 21 h 10 pour le TGV de Vendôme."
     },
     {
+      "pour": "rob",
       "nom": "Paris ↔ Marseille / Aix TGV",
       "de": ["PARIS (intramuros)"],
       "vers": ["MARSEILLE ST CHARLES", "AIX EN PROVENCE TGV"],
@@ -40,6 +43,7 @@
       "note": "Aix TGV inclus (navette pour Marseille). Retour à Paris avant 20 h 15, comme pour Lyon."
     },
     {
+      "pour": "rob",
       "nom": "Paris ↔ Vannes",
       "de": ["PARIS (intramuros)"],
       "vers": ["VANNES"],
@@ -53,6 +57,7 @@
       "note": "Retour à Montparnasse avant 20 h 30 : le TGV de 20 h 56 vers Vendôme part de la même gare."
     },
     {
+      "pour": "rob",
       "nom": "Saint-Pierre-des-Corps ↔ Saumur",
       "de": ["ST PIERRE DES CORPS"],
       "vers": ["SAUMUR"],
