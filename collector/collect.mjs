@@ -131,7 +131,7 @@ function mergeTrains(str, trains) {
 }
 
 /** Ajoute le relevé « idx » à un fichier de trajet. Retourne les changements d'état observés. */
-function updateOd(file, deps, idx, snapDay, prevIdx, countTransitions, stats, wantChanges) {
+function updateOd(file, deps, idx, snapDay, prevIdx, countTransitions, stats, wantChanges, dayByIdx) {
   const changes = [];
   const entries = new Map();
   for (const [date, arr] of Object.entries(file.x)) for (const e of arr) entries.set(`${date}|${e[0]}|${e[1]}|${e[2]}|${e[3]}`, { date, e });
@@ -178,8 +178,21 @@ function updateOd(file, deps, idx, snapDay, prevIdx, countTransitions, stats, wa
     e[6] = s + '.';
   }
   for (const date of Object.keys(file.x)) {
-    if (E.diffDays(snapDay, date) > KEEP_PAST) delete file.x[date];
-    else file.x[date].sort((a, b) => E.toMin(a[2]) - E.toMin(b[2]));
+    if (E.diffDays(snapDay, date) > KEEP_PAST) {
+      // avant d'effacer le détail, on garde pour toujours un résumé compact de la date
+      const rec = E.summarizeDate(file.x[date], date, dayByIdx);
+      (file.y ||= {})[date] = rec;
+      const { known, deps: ds } = E.decodeSummary(rec);
+      const t = (stats.y ||= {})[date] ||= [0, 0, 0, 0, 0, 0, 0, 0];
+      for (const d of ds) {
+        t[0]++;
+        if (d.f & E.YF.ever) t[1]++;
+        if (known & E.YF.opening) { t[3]++; if (d.f & E.YF.opening) t[2]++; }
+        if (known & E.YF.j7) { t[5]++; if (d.f & E.YF.j7) t[4]++; }
+        if (known & E.YF.j1) { t[7]++; if (d.f & E.YF.j1) t[6]++; }
+      }
+      delete file.x[date];
+    } else file.x[date].sort((a, b) => E.toMin(a[2]) - E.toMin(b[2]));
   }
   file.last = idx;
   return changes;
@@ -279,17 +292,19 @@ async function main() {
     files.set(k, { v: 1, o, d, last: -1, x: {}, c: {}, fs: {} });
   }
 
+  const dayByIdx = new Map(meta.snaps.map(s => [s.i, s.day]));
+  dayByIdx.set(idx, snapDay);
   const changes = [];
   const openNowByRule = rules.map(() => ({ open: 0, total: 0 }));
   for (const [k, file] of files) {
     const list = byOd.get(k) || [];
     const wantChanges = rules.length > 0 && list.some(x => rules.some(r => E.ruleMatches(r, x)));
-    const ch = updateOd(file, list, idx, snapDay, prevIdx, countTransitions, stats, wantChanges);
+    const ch = updateOd(file, list, idx, snapDay, prevIdx, countTransitions, stats, wantChanges, dayByIdx);
     if (wantChanges) {
       for (const c of ch) rules.forEach((r, i) => { const s = E.ruleMatches(r, c.x); if (s && c.x.date >= snapDay) changes.push({ ...c, rule: i, sens: s }); });
       for (const x of list) rules.forEach((r, i) => { if (x.date >= snapDay && E.ruleMatches(r, x)) { openNowByRule[i].total++; if (x.ok) openNowByRule[i].open++; } });
     }
-    const empty = !Object.keys(file.x).length && !Object.keys(file.c).length;
+    const empty = !Object.keys(file.x).length && !Object.keys(file.c).length && !Object.keys(file.y || {}).length;
     if (!empty) await writeJson(path.join(PUB, E.odPath(file.o, file.d)), file);
   }
 
@@ -312,7 +327,7 @@ async function main() {
 
   // index des trajets ayant un historique (évite à l'app de chercher des fichiers absents)
   const index = {};
-  for (const f of files.values()) if (Object.keys(f.x).length || Object.keys(f.c).length) (index[f.o] ||= []).push(f.d);
+  for (const f of files.values()) if (Object.keys(f.x).length || Object.keys(f.c).length || Object.keys(f.y || {}).length) (index[f.o] ||= []).push(f.d);
   for (const k in index) index[k].sort();
   await writeJson(path.join(PUB, 'od-index.json'), index);
 
