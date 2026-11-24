@@ -70,6 +70,8 @@ jobs:
 
       - name: Assembler le site
         if: steps.collect.outputs.changed == 'true' || github.event_name != 'schedule'
+        env:
+          PAUSE_JSON: ${{ vars.PAUSE }}
         run: |
           mkdir -p _site/data
           cp -r app/. _site/
@@ -93,6 +95,10 @@ jobs:
               || cp "_site/icon-$s.png" "_site/icon-maskable-$s.png"
           done
           rm -f _site/_icone.html _site/_masque.html
+          # pause d'un compte : variable PAUSE du dépôt (Settings → Secrets and variables → Actions → Variables),
+          # copiée dans le site sans passer par le code ; JSON invalide ou absent → pas de pause
+          printf '%s' "$PAUSE_JSON" > _site/pause.json
+          node -e "const v=JSON.parse(require('fs').readFileSync('_site/pause.json','utf8'));if(!v||typeof v!=='object')throw 0" 2>/dev/null || echo '{}' > _site/pause.json
           if [ -d state/public ]; then cp -r state/public/. _site/data/; fi
           echo "{\"commit\":\"${GITHUB_SHA::7}\",\"built\":\"$(date -u +%FT%TZ)\"}" > _site/version.json
 
