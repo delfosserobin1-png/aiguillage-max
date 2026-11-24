@@ -184,3 +184,16 @@ test('bilan annuel : résumé compact d’une date et série par créneau', () =
   assert.equal(live[0].known & E.YF.j7, 0);
   assert.equal(E.groupRates(live, 'ever', a => a.date.slice(0, 7)).size, 0);
 });
+
+test('explorer : plusieurs créneaux à la fois', () => {
+  const out = E.normalizeRows([
+    row('PARIS (intramuros)', 'LYON (intramuros)', '08:00', '10:00', true, 1, '2026-12-04'),
+    row('PARIS (intramuros)', 'LYON (intramuros)', '12:30', '14:30', true, 2, '2026-12-04'),
+    row('PARIS (intramuros)', 'LYON (intramuros)', '15:00', '17:00', true, 3, '2026-12-04'),
+  ]);
+  const q = { from: ['PARIS (intramuros)'], outDates: ['2026-12-04'], withReturn: false };
+  const deps = w => E.exploreDestinations(out, [], { ...q, outWins: w })[0]?.out.map(x => x.dep) || [];
+  assert.deepEqual(deps([['05:00', '12:00'], ['13:00', '18:00']]), ['08:00', '15:00']);
+  assert.deepEqual(deps([['11:00', '14:30']]), ['12:30']);
+  assert.deepEqual(E.exploreDestinations(out, [], { ...q, outFrom: '00:00', outTo: '23:59' })[0].out.length, 3);
+});
