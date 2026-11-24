@@ -1,0 +1,94 @@
+name: Robot Aiguillage
+
+# La SNCF publie le jeu « tgvmax » une fois par jour, en général vers 4 h 20 UTC.
+# Le robot vérifie souvent le matin (les tâches planifiées GitHub prennent parfois du retard),
+# puis toutes les 3 heures. S'il n'y a pas de nouvelle version, il s'arrête en quelques secondes.
+on:
+  schedule:
+    - cron: '7,37 4-9 * * *'
+    - cron: '23 0-3,10-23/3 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: robot
+  cancel-in-progress: false
+
+jobs:
+  releve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      changed: ${{ steps.collect.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tester le moteur
+        if: github.event_name == 'push'
+        run: node --test test/engine.test.js
+
+      - name: Restaurer l'historique (branche data)
+        run: |
+          mkdir -p state
+          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
+            git fetch --depth=1 origin data
+            git archive FETCH_HEAD | tar -x -C state
+          fi
+          du -sh state
+
+      - name: Relever les quotas
+        id: collect
+        continue-on-error: true
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_SERVER: ${{ vars.NTFY_SERVER }}
+        run: |
+          export APP_URL="https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}/"
+          node collector/collect.mjs --state state --config config.json
+
+      - name: Sauvegarder l'historique
+        if: steps.collect.outputs.changed == 'true'
+        run: |
+          cd state
+          git init -q -b data
+          git add -A
+          git -c user.name="robot-aiguillage" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Relevé SNCF ${{ steps.collect.outputs.version }}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data
+          du -sh public
+
+      - name: Assembler le site
+        if: steps.collect.outputs.changed == 'true' || github.event_name != 'schedule'
+        run: |
+          mkdir -p _site/data
+          cp -r app/. _site/
+          cp config.json _site/config.json
+          if [ -d state/public ]; then cp -r state/public/. _site/data/; fi
+          echo "{\"commit\":\"${GITHUB_SHA::7}\",\"built\":\"$(date -u +%FT%TZ)\"}" > _site/version.json
+
+      - name: Préparer la publication
+        if: steps.collect.outputs.changed == 'true' || github.event_name != 'schedule'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  publier:
+    needs: releve
+    if: needs.releve.outputs.changed == 'true' || github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
