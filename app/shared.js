@@ -606,3 +606,99 @@ export function ruleMatches(rule, x) {
   if (rule.dates && rule.dates.length === 2 && (x.date < rule.dates[0] || x.date > rule.dates[1])) return false;
   return fwd ? 'aller' : 'retour';
 }
+
+/* ---------- bilan à l'année ---------- */
+
+/* Drapeaux d'un départ dans le résumé annuel. */
+export const YF = { ever: 1, opening: 2, j7: 4, j1: 8 };
+export const YEAR_METRICS = {
+  ever: { label: 'Ouverts à un moment', bit: YF.ever, key: 'ever' },
+  open: { label: 'À l’ouverture', bit: YF.opening, key: 'open' },
+  j7: { label: 'À J-7', bit: YF.j7, key: 'j7' },
+  j1: { label: 'La veille', bit: YF.j1, key: 'j1' },
+};
+
+function statesByJ(e, date, dayByIdx) {
+  const first = e[5], s = e[6], st = {};
+  for (let k = 0; k < s.length; k++) {
+    const ch = s[k];
+    if (ch !== '1' && ch !== '0') continue;
+    const day = dayByIdx.get(first + k);
+    if (!day) continue;
+    const J = diffDays(date, day);
+    if (!(J in st)) st[J] = ch;
+  }
+  return st;
+}
+
+/**
+ * Résumé compact d'une date de voyage (gardé pour toujours) :
+ * [drapeaux connus, "HHMMf…"] avec 5 caractères par départ (heure, puis drapeaux en hexadécimal).
+ * « À l'ouverture » = premier relevé complet (J-29, sinon J-28) : à J-30 la date apparaît souvent fermée.
+ */
+export function summarizeDate(entries, date, dayByIdx) {
+  let known = YF.ever, out = '';
+  for (const e of entries) {
+    const st = statesByJ(e, date, dayByIdx);
+    const pick = (...Js) => { for (const J of Js) if (J in st) return st[J]; return null; };
+    let f = Object.values(st).includes('1') ? YF.ever : 0;
+    const o = pick(29, 28), s7 = pick(7, 6, 8), s1 = pick(1, 2);
+    if (o != null) { known |= YF.opening; if (o === '1') f |= YF.opening; }
+    if (s7 != null) { known |= YF.j7; if (s7 === '1') f |= YF.j7; }
+    if (s1 != null) { known |= YF.j1; if (s1 === '1') f |= YF.j1; }
+    out += String(e[2]).replace(':', '') + f.toString(16);
+  }
+  return [known, out];
+}
+
+export function decodeSummary(rec) {
+  const [known, s] = rec, deps = [];
+  for (let i = 0; i + 5 <= s.length; i += 5) deps.push({ depMin: (+s.slice(i, i + 2)) * 60 + (+s.slice(i + 2, i + 4)), f: parseInt(s[i + 4], 16) });
+  return { known, deps };
+}
+
+/** Série annuelle d'un trajet, limitée à un créneau horaire : une entrée par date de voyage. */
+export function yearSeries(odFiles, snaps, fromMin, toMinV, today) {
+  const dayByIdx = new Map((snaps || []).map(s => [s.i, s.day]));
+  const acc = new Map();
+  const add = (date, rec, partial) => {
+    const { known, deps } = decodeSummary(rec);
+    let a = acc.get(date);
+    if (!a) acc.set(date, a = { date, n: 0, ever: 0, open: 0, j7: 0, j1: 0, known: 0, partial });
+    a.known |= known;
+    for (const d of deps) {
+      if (d.depMin < fromMin || d.depMin > toMinV) continue;
+      a.n++;
+      if (d.f & YF.ever) a.ever++;
+      if (d.f & YF.opening) a.open++;
+      if (d.f & YF.j7) a.j7++;
+      if (d.f & YF.j1) a.j1++;
+    }
+  };
+  for (const f of odFiles) {
+    for (const [date, rec] of Object.entries(f?.y || {})) add(date, rec, false);
+    for (const [date, entries] of Object.entries(f?.x || {})) add(date, summarizeDate(entries, date, dayByIdx), date >= today);
+  }
+  return [...acc.values()].filter(a => a.n > 0).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Part de départs ouverts pour une date et un indicateur (null si inconnu). */
+export function yearRate(a, metric) {
+  const m = YEAR_METRICS[metric];
+  if (!a || !a.n || !(a.known & m.bit)) return null;
+  if (metric === 'ever' && a.partial) return a.ever ? a.ever / a.n : null;
+  return a[m.key] / a.n;
+}
+
+/** Regroupe la série (par mois, par jour de semaine…) : clé -> [départs, ouverts]. Les dates en cours sont exclues. */
+export function groupRates(series, metric, keyFn) {
+  const m = YEAR_METRICS[metric], g = new Map();
+  for (const a of series) {
+    if (a.partial || !(a.known & m.bit)) continue;
+    const k = keyFn(a);
+    const t = g.get(k) || [0, 0];
+    t[0] += a.n; t[1] += a[m.key];
+    g.set(k, t);
+  }
+  return g;
+}
