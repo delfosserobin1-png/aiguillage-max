@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * FloRob'ot, le robot de Rob ↔ Flo : relève le jeu SNCF « tgvmax » quand une nouvelle version est publiée,
+ * FloRoBot, le robot de Rob et Flo : relève le jeu SNCF « tgvmax » quand une nouvelle version est publiée,
  * met à jour l'historique de tout le réseau et envoie les alertes ntfy.
  *
  *   node collector/collect.mjs --state state --config config.json
@@ -353,7 +353,7 @@ async function main() {
   // alertes
   if (idx === 0) {
     await ntfy({
-      title: "FloRob'ot est en service",
+      title: 'FloRoBot est en service',
       message: `Premier relevé réussi : **${openCount} départs ouverts** sur ${deps.length} dans les 30 prochains jours.\n\n`
         + (rules.length ? `${rules.length} alerte${rules.length > 1 ? 's' : ''} configurée${rules.length > 1 ? 's' : ''}. Tu seras prévenu à chaque ouverture.` : 'Aucune alerte configurée pour l’instant : ajoute tes trajets dans l’onglet Suivi.'),
       tags: ['white_check_mark', 'train'],
