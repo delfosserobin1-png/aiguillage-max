@@ -112,6 +112,76 @@
     <div class="card" id="s-builder"></div>
     <div class="card" id="s-about"></div>
   </section>
+  <!-- ===== Guide ===== -->
+  <section id="tab-guide" class="tab-page" aria-label="Guide" hidden>
+    <div class="card guide">
+      <h2>Aiguillage en bref</h2>
+      <p>Chaque matin, la SNCF publie quels trains ont des places MAX ouvertes pour les 30 jours à venir. Aiguillage lit ces données, garde leur historique et te dit quoi réserver, et quand.</p>
+      <p>Il ne réserve rien à ta place et ne touche pas à ton compte : tu valides toujours sur SNCF Connect.</p>
+    </div>
+    <div class="card guide">
+      <h2>Les onglets</h2>
+      <dl class="gl">
+        <dt>Trajet</dt><dd>Le verdict pour un voyage précis, ton plan d’action et les graphiques.</dd>
+        <dt>Explorer</dt><dd>Toutes les destinations à 0 € depuis ta gare, retour compris.</dd>
+        <dt>Mes résas</dt><dd>Ton compteur de 6 réservations et tes rappels de confirmation.</dd>
+        <dt>Suivi</dt><dd>L’état du robot et tes alertes.</dd>
+      </dl>
+    </div>
+    <div class="card guide">
+      <h2>Le verdict</h2>
+      <dl class="gl">
+        <dt>Réserve maintenant</dt><dd>Un direct est ouvert à 0 € dans ton créneau. Fonce : les données datent du matin.</dd>
+        <dt>Meilleure option</dt><dd>Rien en direct dans ton créneau, mais une autre solution à 0 € existe.</dd>
+        <dt>Aucune place pour l’instant</dt><dd>Le plan te dit s’il vaut mieux attendre une réouverture ou prendre un billet -30 % en secours.</dd>
+        <dt>Trop tôt</dt><dd>Les places ouvrent à J-30 : l’app te donne la date et un rappel.</dd>
+      </dl>
+    </div>
+    <div class="card guide">
+      <h2>Ce que tu acceptes</h2>
+      <dl class="gl">
+        <dt>± 1 h, ± 2 h, ± 1 jour</dt><dd>Élargit l’horaire ou la date.</dd>
+        <dt>Gares voisines</dt><dd>Massy, Marne-la-Vallée, Lyon St-Exupéry, Aix TGV…</dd>
+        <dt>Correspondances</dt><dd>Deux trains à 0 €. Billets séparés : pas de garantie en cas de retard.</dd>
+        <dt>2 billets, même train</dt><dd>Ton trajet est fermé mais ses deux moitiés sont ouvertes : tu restes dans le train. Compte pour 2 réservations.</dd>
+        <dt>Billet prolongé</dt><dd>Billet jusqu’à une gare plus loin, tu descends avant. Vérifie les conditions SNCF.</dd>
+      </dl>
+    </div>
+    <div class="card guide">
+      <h2>Les graphiques</h2>
+      <dl class="gl">
+        <dt>Radar 30 jours</dt><dd>Un point par départ : plein = ouvert à 0 €, vide = fermé. La bande bleue est ton créneau.</dd>
+        <dt>Historique</dt><dd>Comment ton créneau se remplit relevé après relevé, et la chance qu’un départ rouvre ou se ferme d’un jour à l’autre.</dd>
+        <dt>Année</dt><dd>Un calendrier qui se remplit chaque matin : les périodes ouvertes ou fermées pour ton créneau, par mois et par jour de semaine.</dd>
+      </dl>
+    </div>
+    <div class="card guide">
+      <h2>Les règles MAX JEUNE</h2>
+      <ul class="insights">
+        <li>Les places ouvrent à J-30.</li>
+        <li>6 réservations à 0 € maximum en même temps, et une seule par jour au départ d’une même ville.</li>
+        <li>Confirmation obligatoire entre J-2 et la veille 17 h, sinon la réservation est annulée.</li>
+        <li>Billet -30 % : remboursable sans frais jusqu’à J-7 inclus, puis 19 € sur TGV INOUI.</li>
+      </ul>
+    </div>
+    <div class="card guide">
+      <h2>Les limites</h2>
+      <ul class="insights">
+        <li>Une photo par jour : une place vue ici peut être partie, et une place libérée dans la journée n’apparaît que le lendemain. SNCF Connect fait foi.</li>
+        <li>Ouvert ou fermé seulement : les données ne donnent pas le nombre de places.</li>
+        <li>Les probabilités deviennent fiables après 2 à 3 semaines de relevés ; l’app affiche leur fiabilité.</li>
+      </ul>
+    </div>
+    <div class="card guide">
+      <h2>Astuces</h2>
+      <ul class="insights">
+        <li>Le jour de l’ouverture (J-30), regarde SNCF Connect plusieurs fois : les places arrivent souvent dans la journée.</li>
+        <li>La veille à 17 h, les réservations non confirmées sont annulées : des places peuvent revenir.</li>
+        <li>Ton créneau est toujours fermé ? Le radar et l’onglet Année montrent les jours et horaires plus faciles.</li>
+        <li>Pour être prévenu, crée une alerte dans l’onglet Suivi : notification ntfy chaque matin.</li>
+      </ul>
+    </div>
+  </section>
 </main>
 
 <nav class="tabs" aria-label="Onglets">
@@ -119,6 +189,7 @@
   <a href="#explorer" data-tab="explorer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>Explorer</a>
   <a href="#resas" data-tab="resas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M14 6v12" stroke-dasharray="2 2"/></svg>Mes résas</a>
   <a href="#suivi" data-tab="suivi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9z"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></svg>Suivi</a>
+  <a href="#guide" data-tab="guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.9.8c0 1.7-2.5 2.2-2.5 3.7"/><path d="M12 17.2h.01"/></svg>Guide</a>
 </nav>
 <div id="toast" role="status" aria-live="polite"></div>
 <script type="module" src="app.js"></script>
