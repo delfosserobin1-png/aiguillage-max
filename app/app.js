@@ -31,24 +31,31 @@ function chooseProfil(p) {
   } catch { /* stockage indisponible */ }
   location.reload();
 }
-/* Pause d'un compte, réglée dans config.json : "pause": { "flo": { "jusqua": "<date ISO>", "titre": "…", "message": "…" } }.
-   L'écran couvre tous les onglets jusqu'à l'heure dite, puis l'app se recharge toute seule. */
+/* Pause d'un compte : pause.json, écrit à la publication depuis la variable GitHub PAUSE (rien dans le code ni dans
+   son historique). Format : { "flo": { "titre": "…", "message": "…", "jusqua": "<date ISO, facultative>" } }.
+   L'app vérifie au démarrage, toutes les 30 s et au retour sur l'écran : l'écran de pause apparaît et disparaît sans rafraîchir. */
+let pauseEl = null;
 async function checkPause() {
   if (!profil) return;
   let p;
-  try { p = (await fetch(`config.json?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.json())).pause?.[profil]; } catch { return; }
-  const end = Date.parse(p?.jusqua || '');
-  if (!(end > Date.now())) return;
-  const d = new Date(end), day = E.parisDay(d), today = E.parisDay(), hour = E.fmtMin(E.parisMinutes(d));
-  const when = day === today ? `à ${hour}` : day === E.addDays(today, 1) ? `demain à ${hour}` : `le ${E.frDay(day)} à ${hour}`;
-  const el = document.createElement('div');
-  el.className = 'who-pick';
-  el.setAttribute('role', 'alertdialog');
-  el.setAttribute('aria-modal', 'true');
-  el.innerHTML = `<h2>${esc(p.titre || 'Pause')}</h2>${p.message ? `<p>${esc(p.message)}</p>` : ''}`
-    + `<p style="color:#fff;opacity:.65;font-size:13px">L’app revient ${esc(when)}.</p>`;
-  document.body.append(el);
-  if (end - Date.now() < 864e5) setTimeout(() => location.reload(), end - Date.now() + 2000);
+  try { p = (await fetch('pause.json', { cache: 'no-store' }).then(r => (r.ok ? r.json() : {})))?.[profil]; } catch { return; }
+  const end = p?.jusqua ? Date.parse(p.jusqua) : Infinity;
+  if (!p || !(p.titre || p.message) || !(end > Date.now())) { pauseEl?.remove(); pauseEl = null; return; }
+  let back = '';
+  if (Number.isFinite(end)) {
+    const d = new Date(end), day = E.parisDay(d), today = E.parisDay(), hour = E.fmtMin(E.parisMinutes(d));
+    const when = day === today ? `à ${hour}` : day === E.addDays(today, 1) ? `demain à ${hour}` : `le ${E.frDay(day)} à ${hour}`;
+    back = `<p style="color:#fff;opacity:.65;font-size:13px">L’app revient ${esc(when)}.</p>`;
+  }
+  const html = `${p.titre ? `<h2>${esc(p.titre)}</h2>` : ''}${p.message ? `<p>${esc(p.message)}</p>` : ''}${back}`;
+  if (!pauseEl) {
+    pauseEl = document.createElement('div');
+    pauseEl.className = 'who-pick';
+    pauseEl.setAttribute('role', 'alertdialog');
+    pauseEl.setAttribute('aria-modal', 'true');
+    document.body.append(pauseEl);
+  }
+  if (pauseEl.innerHTML !== html) pauseEl.innerHTML = html;
 }
 function initProfil() {
   $$('.brand .who').forEach(b => {
@@ -1279,6 +1286,8 @@ function fromUrl() {
 async function main() {
   initProfil();
   checkPause();
+  setInterval(() => { if (!document.hidden) checkPause(); }, 30000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkPause(); });
   receiveShare();
   initTrajet();
   initExplorer();
