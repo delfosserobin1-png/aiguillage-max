@@ -1206,7 +1206,7 @@ async function renderSuivi() {
   }
 
   $('#s-about').innerHTML = `<h2>À propos</h2>
-    <p class="small">FloRob’ot lit le jeu de données ouvert « tgvmax » de SNCF Voyageurs (data.sncf.com), publié une fois par jour : un départ y est ouvert ou fermé, sans nombre de places. Les disponibilités sont indicatives ; la vérité est sur SNCF Connect au moment où tu réserves.</p>
+    <p class="small">FloRoBot lit le jeu de données ouvert « tgvmax » de SNCF Voyageurs (data.sncf.com), publié une fois par jour : un départ y est ouvert ou fermé, sans nombre de places. Les disponibilités sont indicatives ; la vérité est sur SNCF Connect au moment où tu réserves.</p>
     <p class="small">L’app ne réserve rien à ta place et ne se connecte pas à ton compte : les CGV de SNCF Connect interdisent les robots de réservation. Il t’aide à décider vite et au bon moment.</p>
     <p class="small muted">Données : SNCF Voyageurs, <a href="https://data.sncf.com/pages/licence" target="_blank" rel="noopener">licence open data SNCF</a>. Projet indépendant, non affilié à la SNCF.</p>`;
 }
