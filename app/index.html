@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Aiguillage — quotas et stratégie MAX JEUNE</title>
+<title>Rob ↔ Flo — quotas et stratégie MAX JEUNE</title>
 <meta name="description" content="Quotas MAX JEUNE, historique et meilleure stratégie de réservation, à partir de l'open data SNCF.">
 <meta name="theme-color" content="#0e1a33">
 <link rel="manifest" href="manifest.webmanifest">
@@ -18,11 +18,10 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="brand">
-    <svg viewBox="0 0 24 24" fill="none" stroke="#ffc845" stroke-width="2.3" stroke-linecap="round" aria-hidden="true"><path d="M8 22V2"/><path d="M8 15.5c0-5.5 4-9 10.5-12"/><circle cx="8" cy="15.5" r="2.2" fill="#ffc845" stroke="none"/></svg>
-    <span>Aiguillage</span>
+  <div class="brand" aria-label="Compte">
+    <button class="who" type="button" data-p="rob">Rob</button><svg class="arrows" viewBox="0 0 44 22" aria-hidden="true"><g fill="none" stroke="#ffc845" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h34l-5-5"/><path d="M40 15H6l5 5"/></g></svg><button class="who" type="button" data-p="flo">Flo</button>
   </div>
-  <button class="fresh" id="fresh" type="button">Données SNCF…</button>
+  <button class="fresh" id="fresh" type="button" title="Actualiser les données SNCF"><span id="fresh-t">Données SNCF…</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
 </header>
 
 <main>
@@ -67,16 +66,12 @@
     <form class="card form" id="f-exp" autocomplete="off" novalidate>
       <h2>Où partir à 0 € ?</h2>
       <div class="field picker" id="p-e"><label for="e-o">Depuis</label><input id="e-o" type="text" placeholder="Ta gare" spellcheck="false"><ul class="sugg" role="listbox" hidden></ul></div>
-      <div class="field"><span class="label">Quand</span><div class="chips" id="e-when"></div></div>
-      <div class="grid2" id="e-dates" hidden>
-        <div class="field"><label for="e-d1">Aller le</label><input type="date" id="e-d1"></div>
-        <div class="field"><label for="e-d2">Retour le</label><input type="date" id="e-d2"></div>
-      </div>
-      <div class="field"><span class="label">Départ de l'aller</span><div class="chips" id="e-outslots"></div></div>
-      <div class="field">
-        <label class="label"><input type="checkbox" id="e-ret" checked> Avec un retour à 0 €</label>
-        <div class="chips" id="e-retslots"></div>
-      </div>
+      <div class="field"><span class="label">Quand</span><div class="chips" id="e-when"></div>
+        <p class="small muted rhint">Touche la date de l’aller, puis celle du retour.</p>
+        <div class="rcal" id="e-cal" role="group" aria-label="Dates de l’aller et du retour"></div>
+        <p class="rsum" id="e-sum" aria-live="polite"></p></div>
+      <div class="field"><span class="label">Départ de l’aller <small class="muted">plusieurs choix possibles</small></span><div class="chips" id="e-outslots"></div></div>
+      <div class="field" id="e-retbox"><span class="label">Départ du retour <small class="muted">plusieurs choix possibles</small></span><div class="chips" id="e-retslots"></div></div>
       <button class="btn block" type="submit">Voir les destinations</button>
     </form>
     <div id="e-out" class="tab-page"></div>
@@ -86,6 +81,7 @@
   <section id="tab-resas" class="tab-page" aria-label="Mes réservations" hidden>
     <div class="card" id="r-counter"></div>
     <div class="card" id="r-list"></div>
+    <div class="card" id="r-shared" hidden></div>
     <details class="card more" id="r-add">
       <summary>Ajouter une réservation à la main</summary>
       <form class="form" id="f-resa" autocomplete="off" novalidate>
@@ -98,6 +94,10 @@
         <div class="grid2">
           <div class="field"><label for="r-train">N° de train</label><input type="text" id="r-train" inputmode="numeric" placeholder="6617"></div>
           <div class="field"><label for="r-tarif">Tarif</label><select id="r-tarif"><option value="max">0 € (MAX)</option><option value="avantage">-30 % (MAX AVANTAGE)</option></select></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="r-voiture">Voiture</label><input type="text" id="r-voiture" inputmode="numeric" placeholder="5"></div>
+          <div class="field"><label for="r-place">Place</label><input type="text" id="r-place" inputmode="numeric" placeholder="42"></div>
         </div>
         <button class="btn block" type="submit">Ajouter</button>
       </form>
@@ -115,9 +115,10 @@
   <!-- ===== Guide ===== -->
   <section id="tab-guide" class="tab-page" aria-label="Guide" hidden>
     <div class="card guide">
-      <h2>Aiguillage en bref</h2>
-      <p>Chaque matin, la SNCF publie quels trains ont des places MAX ouvertes pour les 30 jours à venir. Aiguillage lit ces données, garde leur historique et te dit quoi réserver, et quand.</p>
+      <h2>Rob ↔ Flo en bref</h2>
+      <p>Chaque matin, la SNCF publie quels trains ont des places MAX ouvertes pour les 30 jours à venir. FloRob’ot, le robot de l’app, lit ces données, garde leur historique et te dit quoi réserver, et quand.</p>
       <p>Il ne réserve rien à ta place et ne touche pas à ton compte : tu valides toujours sur SNCF Connect.</p>
+      <p>Chacun a son compte, avec ses réservations et ses alertes : touche ton prénom en haut de l’écran pour changer. Le bouton des données, en haut à droite, vérifie s’il y a du nouveau.</p>
     </div>
     <div class="card guide">
       <h2>Les onglets</h2>
@@ -192,6 +193,11 @@
   <a href="#guide" data-tab="guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.9.8c0 1.7-2.5 2.2-2.5 3.7"/><path d="M12 17.2h.01"/></svg>Guide</a>
 </nav>
 <div id="toast" role="status" aria-live="polite"></div>
+<div class="who-pick" id="who" hidden>
+  <h2>Qui utilise ce téléphone ?</h2>
+  <div class="row"><button type="button" data-p="rob">Rob</button><button type="button" data-p="flo">Flo</button></div>
+  <p>Chacun a ses réservations, ses trajets récents et ses alertes. Pour changer plus tard, touche l’autre prénom en haut de l’écran.</p>
+</div>
 <script type="module" src="app.js"></script>
 </body>
 </html>
