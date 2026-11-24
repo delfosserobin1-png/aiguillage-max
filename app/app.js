@@ -202,7 +202,7 @@ function slotChips(container, current, onPick) {
 
 /* ================= onglets ================= */
 
-const TABS = ['trajet', 'explorer', 'resas', 'suivi'];
+const TABS = ['trajet', 'explorer', 'resas', 'suivi', 'guide'];
 function showTab() {
   const id = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'trajet';
   for (const t of TABS) $(`#tab-${t}`).hidden = t !== id;
@@ -519,7 +519,7 @@ function renderTrajet() {
   const parts = [boardHTML()];
   for (const w of plan.warnings) parts.push(banner('warn', esc(w.text)));
   parts.push(stepsHTML(), optionsHTML(), waitHTML(), deadlinesHTML());
-  parts.push(`<div class="seg" role="tablist"><button type="button" role="tab" data-viz="radar" aria-selected="${(T.viz || 'radar') === 'radar'}">Radar 30 jours</button><button type="button" role="tab" data-viz="hist" aria-selected="${T.viz === 'hist'}">Historique</button></div><div id="t-viz" class="tab-page"></div>`);
+  parts.push(`<div class="seg" role="tablist"><button type="button" role="tab" data-viz="radar" aria-selected="${(T.viz || 'radar') === 'radar'}">Radar</button><button type="button" role="tab" data-viz="hist" aria-selected="${T.viz === 'hist'}">Historique</button><button type="button" role="tab" data-viz="year" aria-selected="${T.viz === 'year'}">Année</button></div><div id="t-viz" class="tab-page"></div>`);
   out.innerHTML = typo(parts.filter(Boolean).join(''));
   drawViz();
 }
@@ -527,14 +527,17 @@ function renderTrajet() {
 function drawViz() {
   const el = $('#t-viz');
   if (!el) return;
-  el.innerHTML = typo((T.viz || 'radar') === 'radar' ? radarPanel() : histPanel());
+  const v = T.viz || 'radar';
+  el.innerHTML = typo(v === 'radar' ? radarPanel() : v === 'year' ? yearPanel() : histPanel());
   $$('.seg [data-viz]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.viz === (T.viz || 'radar'))));
 }
 
 function onTrajetClick(e) {
-  const t = e.target.closest('[data-act],[data-viz],[data-day]');
+  const t = e.target.closest('[data-act],[data-viz],[data-day],[data-ymetric],[data-yday]');
   if (!t || !T.last) return;
   if (t.dataset.viz) { T.viz = t.dataset.viz; drawViz(); return; }
+  if (t.dataset.ymetric) { T.yearMetric = t.dataset.ymetric; drawViz(); return; }
+  if (t.dataset.yday) { showYearDay(t.dataset.yday); return; }
   if (t.dataset.day) { showDay(t.dataset.day); return; }
   if (t.dataset.act === 'booked') {
     const [grp, i] = t.dataset.opt === 'best' ? ['best'] : t.dataset.opt.split(':');
@@ -726,6 +729,119 @@ function curveSVG(target, prev) {
     s += `<text class="${se.cls}t" x="${X(last.J) + 5}" y="${Y(last.open) + 4}">${esc(se.label)}</text>`;
   }
   return `<p class="legend"><span><i class="line" style="background:var(--accent)"></i>ta date</span>${prev.length ? `<span><i class="line" style="background:var(--closed)"></i>mêmes jours, semaines précédentes</span>` : ''}</p><div class="curve">${s}</svg></div>`;
+}
+
+/* ---------- bilan à l'année ---------- */
+
+const MONTH_FMT = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+const monthLabel = ym => MONTH_FMT.format(new Date(E.parseDay(ym + '-01')));
+const METRIC_HELP = {
+  ever: 'Part des départs de ton créneau ouverts à 0 € au moins une fois avant le départ.',
+  open: 'Part des départs ouverts au premier relevé complet après l’ouverture des ventes (J-29).',
+  j7: 'Part des départs encore ouverts une semaine avant le départ.',
+  j1: 'Part des départs ouverts la veille du départ.',
+};
+const lvl = r => (r == null ? 'none' : r === 0 ? 'l0' : r < 0.2 ? 'l1' : r < 0.4 ? 'l2' : r < 0.6 ? 'l3' : r < 0.8 ? 'l4' : 'l5');
+
+function yearPanel() {
+  const { q, odFiles, today } = T.last;
+  const meta = S.hist.meta;
+  if (!meta) return `<div class="card empty"><b>Le robot n’a pas encore fait de relevé</b>Le bilan à l’année se remplira chaque matin dès son premier passage.</div>`;
+  if (!odFiles.length) return `<div class="card empty"><b>Pas encore d’historique pour ce trajet</b>Aucun train MAX direct sur ce trajet dans les relevés du robot.</div>`;
+  const fx = E.toMin(q.from), tx = Math.min(1439, E.toMin(q.to));
+  const series = E.yearSeries(odFiles, meta.snaps, fx, tx, today);
+  T.yearSeries = series;
+  const metric = T.yearMetric || 'ever';
+  const done = series.filter(a => !a.partial);
+  const parts = [];
+  const chips = Object.entries(E.YEAR_METRICS).map(([k, m]) => `<button type="button" class="chip" data-ymetric="${k}" aria-pressed="${k === metric}">${m.label}</button>`).join('');
+  parts.push(`<div class="card"><h2>Bilan à l’année <small>${esc(q.from)}–${esc(q.to)}</small></h2>
+    <div class="chips">${chips}</div>
+    <p class="lead small" style="margin-top:10px">${METRIC_HELP[metric]}</p>
+    ${done.length < 7 ? banner('info', `Le bilan se construit : historique depuis le ${esc(E.frDayLong(meta.first))}. Chaque date passée s’ajoute ici pour toujours ; les dates à venir sont en pointillés.`) : ''}
+    ${calendarHTML(series, metric, today)}
+    <p class="legend" style="margin-top:10px"><span>0 %</span>${[0, 1, 2, 3, 4, 5].map(i => `<i class="cal-key l${i}"></i>`).join('')}<span>100 %</span><span><i class="cal-key partial"></i>à venir</span></p>
+    <p class="note">Touche un jour pour le détail.</p><div id="y-detail"></div></div>`);
+  const byMonth = E.groupRates(series, metric, a => a.date.slice(0, 7));
+  const netMonth = networkMonths(metric);
+  if (byMonth.size) {
+    parts.push(`<div class="card"><h2>Par mois</h2><div class="bars">${[...byMonth.entries()].map(([ym, [n, o]]) => {
+      const r = n ? o / n : 0, net = netMonth.get(ym);
+      return `<div class="bar"><span class="lab">${esc(monthLabel(ym))}</span><span class="track"><span class="fill" style="width:${Math.max(2, Math.round(r * 100))}%"></span></span><span class="v">${pct(r)}</span></div>${net != null ? `<div class="bar sub"><span class="lab small muted">réseau</span><span class="track"><span class="fill net" style="width:${Math.max(2, Math.round(net * 100))}%"></span></span><span class="v muted">${pct(net)}</span></div>` : ''}`;
+    }).join('')}</div><p class="note">Dates passées seulement, pondérées par le nombre de départs.</p></div>`);
+    const byWd = E.groupRates(series, metric, a => E.isoWeekday(a.date));
+    parts.push(`<div class="card"><h2>Par jour de semaine</h2><div class="bars">${[1, 2, 3, 4, 5, 6, 7].filter(w => byWd.has(w)).map(w => {
+      const [n, o] = byWd.get(w), r = n ? o / n : 0;
+      return `<div class="bar${w === E.isoWeekday(q.date) ? ' me' : ''}"><span class="lab">${E.WEEKDAYS_LONG[w - 1]}</span><span class="track"><span class="fill" style="width:${Math.max(2, Math.round(r * 100))}%"></span></span><span class="v">${o}/${n}</span></div>`;
+    }).join('')}</div></div>`);
+  }
+  parts.push(networkCurveHTML());
+  return parts.join('');
+}
+
+function calendarHTML(series, metric, today) {
+  if (!series.length) return '<p class="muted small">Aucun départ dans ce créneau pour l’instant.</p>';
+  const by = new Map(series.map(a => [a.date, a]));
+  const first = series[0].date.slice(0, 7), last = series[series.length - 1].date.slice(0, 7);
+  const months = [];
+  for (let ym = first; ym <= last; ym = E.addDays(ym + '-01', 32).slice(0, 7)) months.push(ym);
+  return `<div class="months">${months.map(ym => {
+    const d1 = ym + '-01', offset = E.isoWeekday(d1) - 1;
+    const days = E.diffDays(E.addDays(E.addDays(d1, 32).slice(0, 7) + '-01', 0), d1);
+    let cells = ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(w => `<span class="wd">${w}</span>`).join('') + '<span class="blank"></span>'.repeat(offset);
+    for (let k = 0; k < days; k++) {
+      const date = E.addDays(d1, k), a = by.get(date);
+      const r = a ? E.yearRate(a, metric) : null;
+      const cls = `d ${a ? lvl(r) : 'none'}${a && a.partial ? ' partial' : ''}${date === today ? ' today' : ''}`;
+      cells += a ? `<button type="button" class="${cls}" data-yday="${date}" title="${esc(E.frDay(date))}${r != null ? ` : ${Math.round(r * 100)} %` : ''}">${k + 1}</button>` : `<span class="${cls}">${k + 1}</span>`;
+    }
+    return `<div class="month"><h3>${esc(monthLabel(ym))}</h3><div class="cal">${cells}</div></div>`;
+  }).join('')}</div>`;
+}
+
+function showYearDay(date) {
+  const a = (T.yearSeries || []).find(x => x.date === date);
+  const el = $('#y-detail');
+  if (!a || !el) return;
+  const k = bit => (a.known & bit ? null : '—');
+  const val = (bit, v) => k(bit) || `${v}/${a.n}`;
+  el.innerHTML = typo(`<div class="daydetail"><h3 class="section-title">${esc(E.frDayLong(date))}${a.partial ? ' <small class="muted">en cours</small>' : ''}</h3>
+    <dl class="kv"><dt>Départs dans ton créneau</dt><dd>${a.n}</dd>
+    <dt>Ouverts à un moment</dt><dd>${a.ever}/${a.n}${a.partial ? ' (pour l’instant)' : ''}</dd>
+    <dt>À l’ouverture (J-29)</dt><dd>${val(E.YF.opening, a.open)}</dd>
+    <dt>À J-7</dt><dd>${val(E.YF.j7, a.j7)}</dd>
+    <dt>La veille</dt><dd>${val(E.YF.j1, a.j1)}</dd></dl>
+    <p class="note">« — » : le robot n’a pas de relevé à ce moment-là pour cette date.</p></div>`);
+  $$('.cal .d').forEach(b => b.classList.toggle('sel', b.dataset.yday === date));
+}
+
+function networkMonths(metric) {
+  const y = S.hist.stats?.y || {}, out = new Map(), acc = new Map();
+  const idx = { ever: [1, 0], open: [2, 3], j7: [4, 5], j1: [6, 7] }[metric];
+  for (const [date, t] of Object.entries(y)) {
+    const ym = date.slice(0, 7), v = acc.get(ym) || [0, 0];
+    v[0] += t[idx[1]]; v[1] += t[idx[0]];
+    acc.set(ym, v);
+  }
+  for (const [ym, [n, o]] of acc) if (n) out.set(ym, o / n);
+  return out;
+}
+
+function networkCurveHTML() {
+  const daily = (S.hist.stats?.daily || []).filter(d => d.deps);
+  if (!daily.length) return '';
+  const last = daily[daily.length - 1];
+  if (daily.length < 2) return `<div class="card"><h2>Tout le réseau</h2><p class="lead small">Au dernier relevé, ${pct(last.open / last.deps)} des départs des 30 prochains jours étaient ouverts à 0 € (${last.open.toLocaleString('fr-FR')} sur ${last.deps.toLocaleString('fr-FR')}). La courbe apparaîtra dès le deuxième relevé.</p></div>`;
+  const W = Math.min(560, Math.max(300, ($('#t-out')?.clientWidth || 360) - 34)), H = 170, L = 34, R = 10, T0 = 10, B = 24;
+  const ys = daily.map(d => d.open / d.deps), maxY = Math.min(1, Math.max(0.1, ...ys) * 1.15);
+  const X = i => L + (daily.length === 1 ? 0 : i / (daily.length - 1)) * (W - L - R);
+  const Y = v => T0 + (1 - v / maxY) * (H - T0 - B);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Part des départs ouverts sur tout le réseau, relevé après relevé">`;
+  for (const t of [0, maxY / 2, maxY]) s += `<line class="gl" x1="${L}" x2="${W - R}" y1="${Y(t)}" y2="${Y(t)}"/><text x="${L - 5}" y="${Y(t) + 4}" text-anchor="end">${Math.round(t * 100)}%</text>`;
+  const ticks = [0, Math.floor((daily.length - 1) / 2), daily.length - 1];
+  for (const i of [...new Set(ticks)]) s += `<text x="${X(i)}" y="${H - 6}" text-anchor="${i === 0 ? 'start' : i === daily.length - 1 ? 'end' : 'middle'}">${E.frShort(daily[i].day)}</text>`;
+  s += `<polyline class="s1" points="${daily.map((d, i) => `${X(i).toFixed(1)},${Y(ys[i]).toFixed(1)}`).join(' ')}"/>`;
+  return `<div class="card"><h2>Tout le réseau</h2><p class="lead small">Part des départs des 30 prochains jours ouverts à 0 €, relevé après relevé (dernier : ${pct(ys[ys.length - 1])}).</p><div class="curve">${s}</svg></div></div>`;
 }
 
 /* ================= onglet Explorer ================= */
