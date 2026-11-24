@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /*
- * Robot Aiguillage : relève le jeu SNCF « tgvmax » quand une nouvelle version est publiée,
+ * FloRob'ot, le robot de Rob ↔ Flo : relève le jeu SNCF « tgvmax » quand une nouvelle version est publiée,
  * met à jour l'historique de tout le réseau et envoie les alertes ntfy.
  *
  *   node collector/collect.mjs --state state --config config.json
  *
  * Variables d'environnement :
- *   NTFY_TOPIC       canal ntfy secret (sans canal : pas d'alerte)
+ *   NTFY_TOPIC       canal ntfy secret de Rob, et des alertes sans « pour » (sans canal : pas d'alerte)
+ *   NTFY_TOPIC_FLO   canal ntfy secret de Flo (alertes "pour": "flo")
  *   NTFY_SERVER      serveur ntfy (défaut https://ntfy.sh)
  *   APP_URL          adresse de l'app, ouverte quand on touche une alerte
  *   TGVMAX_API       URL du jeu de données (défaut : API SNCF)
@@ -29,6 +30,8 @@ const API = process.env.TGVMAX_API || E.API_BASE;
 const FIXTURE = process.env.TGVMAX_FIXTURE || '';
 const KEEP_PAST = +(process.env.KEEP_PAST_DAYS || 14);
 const NTFY_TOPIC = (process.env.NTFY_TOPIC || '').trim();
+const TOPICS = { rob: NTFY_TOPIC, flo: (process.env.NTFY_TOPIC_FLO || '').trim() };
+const topicFor = rule => (rule.pour && rule.pour in TOPICS ? TOPICS[rule.pour] : NTFY_TOPIC);
 const NTFY_SERVER = (process.env.NTFY_SERVER || 'https://ntfy.sh').replace(/\/+$/, '');
 const APP_URL = process.env.APP_URL || '';
 const MIN_ROWS = +(process.env.MIN_ROWS || 5000);
@@ -200,11 +203,11 @@ function updateOd(file, deps, idx, snapDay, prevIdx, countTransitions, stats, wa
 
 /* ---------- alertes ---------- */
 
-async function ntfy(msg) {
+async function ntfy(msg, topic = NTFY_TOPIC) {
   if (process.env.NTFY_DRYRUN) { log('ALERTE (simulation) :', JSON.stringify(msg, null, 1)); return true; }
-  if (!NTFY_TOPIC) { log('NTFY_TOPIC absent : alerte non envoyée'); return false; }
+  if (!topic) { log('canal ntfy absent : alerte non envoyée'); return false; }
   try {
-    const body = { topic: NTFY_TOPIC, markdown: true, ...msg };
+    const body = { topic, markdown: true, ...msg };
     if (APP_URL && !body.click) body.click = APP_URL;
     const res = await fetch(NTFY_SERVER, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
     if (!res.ok) { log(`ntfy a répondu ${res.status}`); return false; }
@@ -251,7 +254,7 @@ async function sendAlerts(rules, changes, openNowByRule) {
       tags: [opens.length ? 'green_circle' : 'red_circle', 'train'],
       priority: opens.length ? 4 : 2,
       click: deepLink(rule, first) || undefined,
-    });
+    }, topicFor(rule));
     if (ok) sent++;
   }
   return sent;
@@ -350,7 +353,7 @@ async function main() {
   // alertes
   if (idx === 0) {
     await ntfy({
-      title: 'Aiguillage est en service',
+      title: "FloRob'ot est en service",
       message: `Premier relevé réussi : **${openCount} départs ouverts** sur ${deps.length} dans les 30 prochains jours.\n\n`
         + (rules.length ? `${rules.length} alerte${rules.length > 1 ? 's' : ''} configurée${rules.length > 1 ? 's' : ''}. Tu seras prévenu à chaque ouverture.` : 'Aucune alerte configurée pour l’instant : ajoute tes trajets dans l’onglet Suivi.'),
       tags: ['white_check_mark', 'train'],
