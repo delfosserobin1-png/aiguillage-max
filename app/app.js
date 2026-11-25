@@ -400,8 +400,12 @@ async function analyse() {
 
 function trainsOf(legs) { return legs.map(l => l.trains.join('/')).join(' + '); }
 
-const CHECK_BTN = `<a class="btn ghost" href="${SNCF_CONNECT}" target="_blank" rel="noopener">Vérifier sur SNCF Connect</a>`;
-const acts = o => (o.noCheck || (o.actions || []).some(x => x.includes(SNCF_CONNECT)) ? o.actions || [] : [...(o.actions || []), CHECK_BTN]);
+const checkBtn = () => {
+  const q = T.last?.q;
+  const href = q?.o?.[0] && q?.d?.[0] && q.date ? E.sncfConnectLink(q.o[0], q.d[0], q.date, q.from) : SNCF_CONNECT;
+  return `<a class="btn ghost" href="${esc(href)}" target="_blank" rel="noopener">Vérifier sur SNCF Connect</a>`;
+};
+const acts = o => (o.noCheck || (o.actions || []).some(x => x.includes(SNCF_CONNECT)) ? o.actions || [] : [...(o.actions || []), checkBtn()]);
 
 function boardHTML() {
   const { q, plan } = T.last;
@@ -438,7 +442,7 @@ function boardHTML() {
       facts: [esc(E.frDay(o.date)), `J-${J}`, `train ${esc(trainsOf(o.legs))}`, esc(E.fmtDur(o.kind === 'extend' ? ((o.getOffAt - l0.depMin + 1440) % 1440) : o.dur)),
         o.slots > 1 ? `<b>${o.slots} réservations</b>` : null],
       say: urg,
-      actions: [`<a class="btn" href="${SNCF_CONNECT}" target="_blank" rel="noopener">Ouvrir SNCF Connect</a>`, '<button class="btn ghost" data-act="booked" data-opt="best">J’ai réservé</button>'],
+      actions: [`<a class="btn" href="${esc(E.sncfConnectLink(l0.o, lN.d, l0.date, l0.dep))}" target="_blank" rel="noopener">Ouvrir SNCF Connect</a>`, '<button class="btn ghost" data-act="booked" data-opt="best">J’ai réservé</button>'],
     });
   }
   const w = plan.wait;
