@@ -619,6 +619,25 @@ export function ruleMatches(rule, x) {
   if (rule.dates && rule.dates.length === 2 && (x.date < rule.dates[0] || x.date > rule.dates[1])) return false;
   return fwd ? 'aller' : 'retour';
 }
+// Veille de voyage : départs de demain que suivent les règles, regroupés par règle et par sens,
+// avec combien étaient ouverts au relevé du matin.
+export function tomorrowLegs(rules, deps, today) {
+  const tomorrow = addDays(today, 1), out = [];
+  rules.forEach((rule, i) => {
+    const legs = new Map();
+    for (const x of deps) {
+      if (x.date !== tomorrow) continue;
+      const s = ruleMatches(rule, x);
+      if (!s) continue;
+      if (!legs.has(s)) legs.set(s, { rule: i, sens: s, open: 0, total: 0, first: x });
+      const l = legs.get(s);
+      l.total++;
+      if (x.ok) l.open++;
+    }
+    out.push(...legs.values());
+  });
+  return out;
+}
 
 /* ---------- bilan à l'année ---------- */
 
