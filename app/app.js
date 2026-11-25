@@ -515,7 +515,8 @@ function optHTML(o, key, top) {
   const price = o.free ? '<span class="price free">0 €</span>'
     : o.kind === 'mixed' ? `<span class="price part">0 € + ${capSum != null ? `${capSum} € max` : 'payant'}</span>`
     : `<span class="price paid">${capSum != null ? `${capSum} € max` : 'payant'}</span>`;
-  const paidTxt = l => { const c = E.capAvantage(l); return `, payant : ${c != null ? `${c} € max avec la Carte Avantage` : 'prix sur SNCF Connect'} · <a href="${esc(E.sncfConnectLink(l.o, l.d, l.date, l.dep))}" target="_blank" rel="noopener">prix exact</a>`; };
+  // le lien ouvre SNCF Connect une heure plus tôt, pour voir aussi les trains voisins (0 €, OUIGO moins chers)
+  const paidTxt = l => { const c = E.capAvantage(l); return `, payant : ${c != null ? `${c} € max avec la Carte Avantage` : 'prix sur SNCF Connect'} · <a href="${esc(E.sncfConnectLink(l.o, l.d, l.date, E.fmtMin(Math.max(0, E.toMin(l.dep) - 60))))}" target="_blank" rel="noopener">comparer les prix</a>`; };
   const l0 = o.legs[0], lN = o.legs[o.legs.length - 1];
   const legs = o.kind === 'extend'
     ? `<li><span class="st ok"></span><span><b>${l0.dep}</b> ${P(l0.o)} → descente à ${P(o.getOff)} <b>${E.fmtMin(o.getOffAt)}</b></span></li><li class="via">Billet jusqu'à ${P(l0.d)} (${l0.arr}), train ${esc(l0.trains.join('/'))}</li>`
@@ -553,7 +554,7 @@ function optionsHTML() {
   if (plan.free.length) parts.push(`<div class="card"><h2>${plural(plan.free.length, 'option')} à 0 € <small>${plan.free.length > 1 ? 'disponibles' : 'disponible'} à l’heure d’import${S.apiMeta?.at ? ` (${E.fmtMin(E.parisMinutes(new Date(S.apiMeta.at)))})` : ''}</small></h2><div class="opts">${plan.free.map((o, i) => optHTML(o, `free:${i}`, i === 0)).join('')}</div></div>`);
   else if (plan.verdict.code !== 'trop-tot' && plan.verdict.code !== 'passe') parts.push(`<div class="card"><h2>Options à 0 €</h2><p class="lead">Aucune avec tes critères. Élargis ce que tu acceptes (horaires, gares voisines, correspondances) ou regarde le radar pour un autre jour.</p></div>`);
   if (plan.partial.length) parts.push(`<details class="card more"><summary>En partie gratuit (${plan.partial.length})</summary><div class="opts">${plan.partial.map((o, i) => optHTML(o, `partial:${i}`)).join('')}</div></details>`);
-  if (plan.paid.length) parts.push(`<details class="card more"><summary>Payant, au prix Carte Avantage (${plan.paid.length})</summary><div class="opts">${plan.paid.map((o, i) => optHTML(o, `paid:${i}`)).join('')}</div></details>`);
+  if (plan.paid.length) parts.push(`<details class="card more"><summary>Payant, au prix Carte Avantage (${plan.paid.length})</summary><p class="small">FloRoBot ne connaît que les plafonds Carte Avantage des TGV INOUI et Intercités. Il ne voit ni les prix réels, ni les OUIGO, souvent moins chers : compare sur SNCF Connect.</p><div class="opts">${plan.paid.map((o, i) => optHTML(o, `paid:${i}`)).join('')}</div></details>`);
   return parts.join('');
 }
 
