@@ -213,3 +213,10 @@ test('veille de voyage : départs de demain suivis, par règle et par sens', () 
   assert.deepEqual(sun.map(l => [l.sens, l.open, l.total]), [['retour', 1, 1]]);
   assert.equal(E.tomorrowLegs([rule], deps, '2026-12-04').length, 0);
 });
+
+test('lien SNCF Connect pré-rempli', () => {
+  assert.equal(E.sncfConnectLink('PARIS (intramuros)', 'LYON (intramuros)', '2026-11-26', '19:56'),
+    'https://www.sncf-connect.com/home/search?userInput=Paris+Lyon+le+26+novembre+%C3%A0+19h');
+  assert.equal(E.sncfConnectLink('ST PIERRE DES CORPS', 'SAUMUR', '2026-12-06'),
+    'https://www.sncf-connect.com/home/search?userInput=Saint+Pierre+Des+Corps+Saumur+le+6+d%C3%A9cembre');
+});
