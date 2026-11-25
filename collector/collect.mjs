@@ -34,6 +34,8 @@ const TOPICS = { rob: NTFY_TOPIC, flo: (process.env.NTFY_TOPIC_FLO || '').trim()
 const topicFor = rule => (rule.pour && rule.pour in TOPICS ? TOPICS[rule.pour] : NTFY_TOPIC);
 const NTFY_SERVER = (process.env.NTFY_SERVER || 'https://ntfy.sh').replace(/\/+$/, '');
 const APP_URL = process.env.APP_URL || '';
+const SNCF_CONNECT = 'https://www.sncf-connect.com/';
+const RAPPEL_VEILLE = '17:00';
 const MIN_ROWS = +(process.env.MIN_ROWS || 5000);
 
 const log = (...a) => console.log('[robot]', ...a);
@@ -203,6 +205,46 @@ function updateOd(file, deps, idx, snapDay, prevIdx, countTransitions, stats, wa
 
 /* ---------- alertes ---------- */
 
+/* ---------- rappel de 17 h la veille ----------
+   Les réservations MAX non confirmées sont annulées la veille à 17 h : des places reviennent, visibles en direct sur
+   SNCF Connect, alors que l'open data ne les montrera qu'au relevé du lendemain. Au relevé du matin, le robot programme
+   (ntfy, livraison différée) une notification pour 17 h si demain est un jour de voyage suivi. Une seule par jour. */
+async function scheduleEveningWindow(rules, deps, meta) {
+  const today = E.parisDay(), tomorrow = E.addDays(today, 1);
+  const at = E.parisToUTC(today, RAPPEL_VEILLE).getTime();
+  meta.rappels = (meta.rappels || []).slice(-14);
+  if (meta.rappels.includes(today) || at - Date.now() < 5 * 60e3) return 0;
+  meta.rappels.push(today);
+  const legs = E.tomorrowLegs(rules, deps, today);
+  const byTopic = new Map();
+  for (const l of legs) {
+    const t = topicFor(rules[l.rule]);
+    if (!byTopic.has(t)) byTopic.set(t, []);
+    byTopic.get(t).push(l);
+  }
+  let sent = 0;
+  for (const [topic, list] of byTopic) {
+    const lines = list.map(l => {
+      const r = rules[l.rule];
+      const name = r.nom || `${E.pretty(r.de?.[0] || '?')} → ${E.pretty(r.vers?.[0] || '?')}`;
+      return `- ${l.sens === 'retour' ? '↩︎ ' : ''}${name} : ${l.open} sur ${l.total} ouvert${l.open > 1 ? 's' : ''} ce matin`;
+    });
+    const app = deepLink(rules[list[0].rule], { x: list[0].first, sens: list[0].sens });
+    const ok = await ntfy({
+      title: '17 h : des places MAX reviennent pour demain',
+      message: `Les réservations MAX non confirmées pour demain (${E.frDay(tomorrow)}) sont annulées à 17 h. `
+        + `Les places libérées apparaissent en direct sur SNCF Connect : c’est le moment de vérifier.\n\n${lines.join('\n')}`,
+      tags: ['alarm_clock', 'train'],
+      priority: 4,
+      click: SNCF_CONNECT,
+      actions: [{ action: 'view', label: 'Ouvrir SNCF Connect', url: SNCF_CONNECT }, ...(app ? [{ action: 'view', label: 'Voir dans FloRoBot', url: app }] : [])],
+      delay: String(Math.floor(at / 1000)),
+    }, topic);
+    if (ok) sent++;
+  }
+  return sent;
+}
+
 async function ntfy(msg, topic = NTFY_TOPIC) {
   if (process.env.NTFY_DRYRUN) { log('ALERTE (simulation) :', JSON.stringify(msg, null, 1)); return true; }
   if (!topic) { log('canal ntfy absent : alerte non envoyée'); return false; }
@@ -269,6 +311,17 @@ async function main() {
   log(`version SNCF : ${remote.version}${lastSnap ? ` (dernier relevé : ${lastSnap.v})` : ' (premier relevé)'}`);
   await setOutput('version', remote.version);
   if (lastSnap && lastSnap.v === remote.version) {
+    // pas de nouvelle publication : il peut rester le rappel de 17 h à programmer (relevé du matin manqué, mise à jour du robot)
+    const today = E.parisDay();
+    const config = CONFIG ? await readJson(CONFIG, {}) : {};
+    const rules = (config.alertes || []).filter(r => r && r.de?.length && r.vers?.length);
+    if (rules.length && !(meta.rappels || []).includes(today) && E.parisToUTC(today, RAPPEL_VEILLE).getTime() - Date.now() > 5 * 60e3) {
+      const deps = E.normalizeRows(await fetchRows(remote.fields || []));
+      log(`rappel de 17 h : ${await scheduleEveningWindow(rules, deps, meta)} notification(s) programmée(s)`);
+      await writeJson(path.join(PUB, 'meta.json'), meta);
+      await setOutput('changed', 'true');
+      return;
+    }
     log('Pas de nouvelle publication : rien à faire.');
     await setOutput('changed', 'false');
     return;
@@ -346,6 +399,7 @@ async function main() {
   meta.keepPastDays = KEEP_PAST;
   meta.odCount = [...files.values()].filter(f => Object.keys(f.x).length).length;
   meta.snaps.push({ i: idx, v: remote.version, day: snapDay, at: remote.at || null, rows: rows.length, deps: deps.length, open: openCount, counted: countTransitions });
+  if (rules.length) log(`rappel de 17 h : ${await scheduleEveningWindow(rules, deps, meta)} notification(s) programmée(s)`);
   meta.updated = new Date().toISOString();
   await writeJson(path.join(PUB, 'meta.json'), meta);
   log(`${meta.odCount} trajets suivis dans l'historique, ${changes.length} changements sur les alertes`);
