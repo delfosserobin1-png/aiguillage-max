@@ -98,6 +98,17 @@ export function pretty(name) {
     .replace(/\bTgv\b/g, 'TGV').replace(/\bCdg(\d?)\b/g, 'CDG$1').replace(/\(Intramuros\)/, '(intramuros)');
 }
 
+/* Lien SNCF Connect pré-rempli : la même phrase que dans sa barre de recherche (« Paris Lyon le 26 novembre à 19h »)
+   ouvre directement la liste des trains. */
+const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+export function sncfConnectLink(o, d, date, hhmm) {
+  const name = st => pretty(String(st).replace(/\s*\(intramuros\)\s*/i, ' ').replace(/\bSTE\b/g, 'SAINTE').replace(/\bST\b/g, 'SAINT').trim());
+  const [, m, day] = String(date).split('-').map(Number);
+  const min = hhmm ? toMin(hhmm) : NaN;
+  const q = `${name(o)} ${name(d)} le ${day} ${MOIS[m - 1]}${Number.isFinite(min) ? ` à ${Math.floor(min / 60)}h` : ''}`;
+  return `https://www.sncf-connect.com/home/search?userInput=${encodeURIComponent(q).replace(/%20/g, '+')}`;
+}
+
 /* Gares proches les unes des autres (même agglomération ou gare TGV de la ville). */
 const NEAR_GROUPS = [
   [/^PARIS\b/, /MARNE.LA.VALL/, /^MASSY/, /AEROPORT.CDG|ROISSY/],
