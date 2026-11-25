@@ -220,3 +220,25 @@ test('lien SNCF Connect pré-rempli', () => {
   assert.equal(E.sncfConnectLink('ST PIERRE DES CORPS', 'SAUMUR', '2026-12-06'),
     'https://www.sncf-connect.com/home/search?userInput=Saint+Pierre+Des+Corps+Saumur+le+6+d%C3%A9cembre');
 });
+
+test('prix maximum Carte Avantage selon la durée', () => {
+  assert.equal(E.capAvantage({ dur: 89 }), 49);
+  assert.equal(E.capAvantage({ dur: 90 }), 69);
+  assert.equal(E.capAvantage({ dur: 180 }), 69);
+  assert.equal(E.capAvantage({ dur: 181 }), 89);
+  assert.equal(E.capAvantage({ dur: 120, entity: 'AUTOCAR SNCF' }), null);
+});
+
+test('jauge du jour et solidité', () => {
+  const mk = ok => ({ ok });
+  assert.equal(E.dayGauge([]), null);
+  assert.equal(E.dayGauge([mk(false), mk(false)]).level, 'max');
+  assert.equal(E.dayGauge([mk(true), mk(false), mk(false), mk(false), mk(false), mk(false)]).level, 'dernieres');
+  assert.equal(E.dayGauge([mk(true), mk(true), mk(true), mk(false)]).level, 'places');
+  assert.equal(E.solidity({ date: '2026-12-04', depMin: 1140 }, '2026-11-25', null, null), null);
+  const g = {};
+  for (let w = 1; w <= 7; w++) for (let sl = 0; sl < 6; sl++) for (let b = 0; b < 6; b++) g[`${w}|${sl}|${b}`] = [10, 90, 5, 95];
+  const s = E.solidity({ date: '2026-12-04', depMin: 1140 }, '2026-11-25', null, g);
+  assert.equal(s.level, 'fragile');
+  assert.equal(s.label, 'part souvent dans la journée');
+});
