@@ -10,6 +10,9 @@ const pct = x => (x >= 0.95 ? '> 95 %' : x > 0 && x < 0.05 ? '< 5 %' : `${Math.r
 /* Typographie française : espaces fines insécables avant % : ; ? ! » et après «. */
 const typo = h => h.replace(/(\d|[<>]) %/g, '$1 %').replace(/ ([:;?!»])/g, ' $1').replace(/« /g, '« ').replace(/(\d) (h|min)\b/g, '$1 $2');
 const plural = (n, s, p = s + 's') => `${n} ${n > 1 ? p : s}`;
+// en dessous de 7 nuits de relevés, les chances de réouverture ne veulent encore rien dire : on ne les affiche pas
+const NUITS_MIN = 7;
+const nuitsReleves = () => (S.hist.meta?.snaps || []).filter(s => s.counted).length;
 /* ---------- comptes : Rob et Flo ont chacun leurs données sur le téléphone ---------- */
 const PROFILS = { rob: 'Rob', flo: 'Flo' };
 const PERSO = ['resas', 'partages', 'trajet', 'flex', 'altOff', 'recents', 'explore'];
@@ -386,6 +389,7 @@ async function analyse() {
     const odC = E.mergeCounters(odFiles.map(f => f.c));
     const globalC = S.hist.stats?.c || null;
     const plan = E.buildPlan(q, { direct, fromO, toD }, { today, resas: S.resas, odC, globalC });
+    if (nuitsReleves() < NUITS_MIN) plan.wait.available = false;
     if (id !== runId) return;
     T.last = { q, plan, direct, odFiles, odC, globalC, today };
     renderTrajet();
@@ -578,7 +582,7 @@ function waitHTML() {
   const meta = S.hist.meta;
   if (!w.available) {
     const since = meta ? `Le robot collecte depuis le ${esc(E.frDayLong(meta.first))} (${plural(meta.snaps.length, 'relevé')}).` : 'Le robot n’a pas encore fait son premier relevé.';
-    return `<div class="card"><h2>${title}</h2><p class="lead">${w.closed} départ${w.closed > 1 ? 's' : ''} fermé${w.closed > 1 ? 's' : ''} dans ton créneau. ${since} Les probabilités de réouverture apparaîtront après quelques jours de relevés.</p></div>`;
+    return `<div class="card"><h2>${title}</h2><p class="lead">${w.closed} départ${w.closed > 1 ? 's' : ''} fermé${w.closed > 1 ? 's' : ''} dans ton créneau. ${since} Les chances de réouverture s’afficheront après ${NUITS_MIN} nuits de relevés (${plural(nuitsReleves(), 'nuit')} pour l’instant).</p></div>`;
   }
   const rows = w.perDep.slice(0, 6).map(r => `<div class="bar"><span class="lab">${r.dep.dep} ${r.dep.trains.length ? `<small class="muted">${esc(r.dep.trains[0])}</small>` : ''}</span><span class="track"><span class="fill" style="width:${Math.max(2, Math.round(r.p * 100))}%"></span></span><span class="v">${pct(r.p)}</span></div>`).join('');
   const nMin = Math.min(...w.perDep.map(r => r.nRoute));
@@ -760,7 +764,7 @@ function histPanel() {
     <p class="lead small">Départs ouverts entre ${esc(q.from)} et ${esc(q.to)}, relevé après relevé, du plus loin (J-30) au jour du départ.</p>
     ${curveSVG(target, prev)}
     <p class="note">Historique depuis le ${esc(E.frDayLong(meta.first))} : ${plural(snaps.length, 'relevé')}.${target.length < 2 ? ' Ta date n’a pas encore assez de relevés pour tracer une courbe.' : ''}</p></div>`);
-  if (E.hasHistory(odC, globalC)) {
+  if (E.hasHistory(odC, globalC) && nuitsReleves() >= NUITS_MIN) {
     const cur = E.bucketOf(Math.max(0, E.diffDays(q.date, today) - 1));
     const rows = [5, 4, 3, 2, 1, 0].map(b => {
       const r = E.transitionRates(odC, globalC, wd, sl, b);
