@@ -23,7 +23,7 @@ concurrency:
 jobs:
   releve:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 120
     outputs:
       changed: ${{ steps.collect.outputs.changed }}
     steps:
@@ -53,9 +53,11 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NTFY_TOPIC_FLO: ${{ secrets.NTFY_TOPIC_FLO }}
           NTFY_SERVER: ${{ vars.NTFY_SERVER }}
+          # passages programmés : avant la publication du matin, guetter la SNCF jusqu'à 100 min
+          ATTENDRE: ${{ github.event_name == 'schedule' && '100' || '0' }}
         run: |
           export APP_URL="https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}/"
-          node collector/collect.mjs --state state --config config.json
+          node collector/collect.mjs --state state --config config.json --attendre "$ATTENDRE"
 
       - name: Sauvegarder l'historique
         if: steps.collect.outputs.changed == 'true'
