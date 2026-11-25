@@ -526,7 +526,9 @@ function optHTML(o, key, top) {
   const Oq = [...q.o, ...q.oAlt], Dq = [...q.d, ...q.dAlt];
   const sol = o.legs.filter(l => l.ok).map(l => E.solidity(l, plan.today, Oq.includes(l.o) && Dq.includes(l.d) ? T.last.odC : null, T.last.globalC))
     .filter(Boolean).sort((a, b) => b.close - a.close)[0];
-  if (sol) flags.push(`<span class="flag${sol.level === 'fragile' ? ' warn' : ''}">${esc(sol.label)}</span>`);
+  // tant que l'historique est court, on dit sur combien de nuits de relevés l'estimation repose
+  const nuits = (S.hist.meta?.snaps || []).filter(s => s.counted).length;
+  if (sol) flags.push(`<span class="flag${sol.level === 'fragile' ? ' warn' : ''}">${esc(sol.label)}${nuits < 14 ? ` (estimé sur ${plural(nuits, 'nuit')})` : ''}</span>`);
   if (o.dayShift) flags.push(`<span class="flag">${o.dayShift > 0 ? 'le lendemain' : 'la veille'} (${esc(E.frDay(o.date))})</span>`);
   if (o.dev) flags.push(`<span class="flag">${o.depMin < fromM ? 'plus tôt' : 'plus tard'} que ton créneau de ${E.fmtDur(o.dev)}</span>`);
   if (o.slots > 1) flags.push(`<span class="flag">${o.slots} réservations au compteur</span>`);
