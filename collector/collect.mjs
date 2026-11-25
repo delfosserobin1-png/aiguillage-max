@@ -206,6 +206,9 @@ function updateOd(file, deps, idx, snapDay, prevIdx, countTransitions, stats, wa
 
 /* ---------- alertes ---------- */
 
+// boutons ntfy : la recherche SNCF Connect pré-remplie de chaque trajet du rappel (3 au plus)
+const legButtons = list => list.slice(0, 3).map(l => ({ action: 'view', label: `${E.pretty(l.first.o).replace(' (intramuros)', '')} → ${E.pretty(l.first.d).replace(' (intramuros)', '')}`, url: E.sncfConnectLink(l.first.o, l.first.d, l.first.date, l.first.dep) }));
+
 /* ---------- rappel de 17 h la veille ----------
    Les réservations MAX non confirmées sont annulées la veille à 17 h : des places reviennent, visibles en direct sur
    SNCF Connect, alors que l'open data ne les montrera qu'au relevé du lendemain. Au relevé du matin, le robot programme
@@ -230,15 +233,14 @@ async function scheduleEveningWindow(rules, deps, meta) {
       const name = r.nom || `${E.pretty(r.de?.[0] || '?')} → ${E.pretty(r.vers?.[0] || '?')}`;
       return `- ${l.sens === 'retour' ? '↩︎ ' : ''}${name} : ${l.open} sur ${l.total} ouvert${l.open > 1 ? 's' : ''} ce matin`;
     });
-    const app = deepLink(rules[list[0].rule], { x: list[0].first, sens: list[0].sens });
     const ok = await ntfy({
       title: '17 h : des places MAX reviennent pour demain',
       message: `Les réservations MAX non confirmées pour demain (${E.frDay(tomorrow)}) sont annulées à 17 h. `
         + `Les places libérées apparaissent en direct sur SNCF Connect : c’est le moment de vérifier.\n\n${lines.join('\n')}`,
       tags: ['alarm_clock', 'train'],
       priority: 4,
-      click: SNCF_CONNECT,
-      actions: [{ action: 'view', label: 'Ouvrir SNCF Connect', url: SNCF_CONNECT }, ...(app ? [{ action: 'view', label: 'Voir dans FloRoBot', url: app }] : [])],
+      click: legButtons(list)[0]?.url || SNCF_CONNECT,
+      actions: legButtons(list),
       delay: String(Math.floor(at / 1000)),
     }, topic);
     if (ok) sent++;
@@ -276,8 +278,8 @@ async function scheduleMidnightWindow(rules, deps, meta) {
         + `souvent à minuit. Regarde SNCF Connect vers 0 h : si elles s’ouvrent à cette heure-là, tu passes avant le rush du matin.\n\n${lines.join('\n')}`,
       tags: ['crescent_moon', 'train'],
       priority: 4,
-      click: SNCF_CONNECT,
-      actions: [{ action: 'view', label: 'Ouvrir SNCF Connect', url: SNCF_CONNECT }],
+      click: legButtons(list)[0]?.url || SNCF_CONNECT,
+      actions: legButtons(list),
       delay: String(Math.floor(at / 1000)),
     }, topic);
     if (ok) sent++;
@@ -335,8 +337,8 @@ async function sendAlerts(rules, changes, openNowByRule) {
       message: parts.join('\n\n').slice(0, 3900),
       tags: [opens.length ? 'green_circle' : 'red_circle', 'train'],
       priority: opens.length ? 5 : 2,
-      click: opens.length ? SNCF_CONNECT : deepLink(rule, first) || undefined,
-      actions: opens.length ? [{ action: 'view', label: 'Ouvrir SNCF Connect', url: SNCF_CONNECT }, ...(deepLink(rule, first) ? [{ action: 'view', label: 'Voir dans FloRoBot', url: deepLink(rule, first) }] : [])] : undefined,
+      click: opens.length ? E.sncfConnectLink(first.x.o, first.x.d, first.x.date, first.x.dep) : deepLink(rule, first) || undefined,
+      actions: opens.length ? [{ action: 'view', label: 'Réserver sur SNCF Connect', url: E.sncfConnectLink(first.x.o, first.x.d, first.x.date, first.x.dep) }, ...(deepLink(rule, first) ? [{ action: 'view', label: 'Voir dans FloRoBot', url: deepLink(rule, first) }] : [])] : undefined,
     }, topicFor(rule));
     if (ok) sent++;
   }
