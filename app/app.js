@@ -509,13 +509,24 @@ function stepsHTML() {
 function optHTML(o, key, top) {
   const { q, plan } = T.last;
   const fromM = E.toMin(q.from);
-  const price = o.free ? '<span class="price free">0 €</span>' : o.kind === 'mixed' ? '<span class="price part">0 € + -30 %</span>' : '<span class="price paid">-30 %</span>';
+  // prix des tronçons payants : plafond Carte Avantage Jeune (le prix exact, qui varie, est sur SNCF Connect)
+  const caps = o.legs.filter(l => !l.ok).map(E.capAvantage);
+  const capSum = caps.length && caps.every(c => c != null) ? caps.reduce((a, c) => a + c, 0) : null;
+  const price = o.free ? '<span class="price free">0 €</span>'
+    : o.kind === 'mixed' ? `<span class="price part">0 € + ${capSum != null ? `${capSum} € max` : 'payant'}</span>`
+    : `<span class="price paid">${capSum != null ? `${capSum} € max` : 'payant'}</span>`;
+  const paidTxt = l => { const c = E.capAvantage(l); return `, payant : ${c != null ? `${c} € max avec la Carte Avantage` : 'prix sur SNCF Connect'} · <a href="${esc(E.sncfConnectLink(l.o, l.d, l.date, l.dep))}" target="_blank" rel="noopener">prix exact</a>`; };
   const l0 = o.legs[0], lN = o.legs[o.legs.length - 1];
   const legs = o.kind === 'extend'
     ? `<li><span class="st ok"></span><span><b>${l0.dep}</b> ${P(l0.o)} → descente à ${P(o.getOff)} <b>${E.fmtMin(o.getOffAt)}</b></span></li><li class="via">Billet jusqu'à ${P(l0.d)} (${l0.arr}), train ${esc(l0.trains.join('/'))}</li>`
     : o.legs.map((l, i) => `${i ? `<li class="via">${o.kind === 'split' ? 'Tu restes dans le train' : `Changement à ${P(l.o)}${o.changeStation ? ' (autre gare)' : ''}, attente ${E.fmtDur(o.wait)}`}</li>` : ''}
-      <li><span class="st ${l.ok ? 'ok' : 'no'}"></span><span><b>${l.dep}</b> ${P(l.o)} → ${P(l.d)} <span class="muted">${l.arr}, train ${esc(l.trains.join('/'))}${l.ok ? '' : ', payant'}</span></span></li>`).join('');
+      <li><span class="st ${l.ok ? 'ok' : 'no'}"></span><span><b>${l.dep}</b> ${P(l.o)} → ${P(l.d)} <span class="muted">${l.arr}, train ${esc(l.trains.join('/'))}${l.ok ? '' : paidTxt(l)}</span></span></li>`).join('');
   const flags = [];
+  // solidité : le départ ouvert le plus fragile de l'option, d'après l'historique
+  const Oq = [...q.o, ...q.oAlt], Dq = [...q.d, ...q.dAlt];
+  const sol = o.legs.filter(l => l.ok).map(l => E.solidity(l, plan.today, Oq.includes(l.o) && Dq.includes(l.d) ? T.last.odC : null, T.last.globalC))
+    .filter(Boolean).sort((a, b) => b.close - a.close)[0];
+  if (sol) flags.push(`<span class="flag${sol.level === 'fragile' ? ' warn' : ''}">${esc(sol.label)}</span>`);
   if (o.dayShift) flags.push(`<span class="flag">${o.dayShift > 0 ? 'le lendemain' : 'la veille'} (${esc(E.frDay(o.date))})</span>`);
   if (o.dev) flags.push(`<span class="flag">${o.depMin < fromM ? 'plus tôt' : 'plus tard'} que ton créneau de ${E.fmtDur(o.dev)}</span>`);
   if (o.slots > 1) flags.push(`<span class="flag">${o.slots} réservations au compteur</span>`);
@@ -532,12 +543,15 @@ function optHTML(o, key, top) {
 }
 
 function optionsHTML() {
-  const { plan } = T.last;
+  const { plan, q, direct } = T.last;
   const parts = [];
+  // jauge du jour, sur l'échelle du simulateur SNCF (directs du trajet cherché, relevé du matin)
+  const g = E.dayGauge((direct || []).filter(x => x.date === q.date && q.o.includes(x.o) && q.d.includes(x.d)));
+  if (g) parts.push(`<div class="card"><p class="small" style="margin:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="pill ${{ places: 'confirmee', dernieres: 'a-confirmer', max: 'urgent' }[g.level]}">${g.label}</span><span>${g.open} direct${g.open > 1 ? 's' : ''} sur ${g.total} à 0 € ce jour-là, au relevé du matin</span></p></div>`);
   if (plan.free.length) parts.push(`<div class="card"><h2>${plural(plan.free.length, 'option')} à 0 € <small>${plan.free.length > 1 ? 'disponibles' : 'disponible'} à l’heure d’import${S.apiMeta?.at ? ` (${E.fmtMin(E.parisMinutes(new Date(S.apiMeta.at)))})` : ''}</small></h2><div class="opts">${plan.free.map((o, i) => optHTML(o, `free:${i}`, i === 0)).join('')}</div></div>`);
   else if (plan.verdict.code !== 'trop-tot' && plan.verdict.code !== 'passe') parts.push(`<div class="card"><h2>Options à 0 €</h2><p class="lead">Aucune avec tes critères. Élargis ce que tu acceptes (horaires, gares voisines, correspondances) ou regarde le radar pour un autre jour.</p></div>`);
   if (plan.partial.length) parts.push(`<details class="card more"><summary>En partie gratuit (${plan.partial.length})</summary><div class="opts">${plan.partial.map((o, i) => optHTML(o, `partial:${i}`)).join('')}</div></details>`);
-  if (plan.paid.length) parts.push(`<details class="card more"><summary>Payant au tarif -30 % (${plan.paid.length})</summary><div class="opts">${plan.paid.map((o, i) => optHTML(o, `paid:${i}`)).join('')}</div></details>`);
+  if (plan.paid.length) parts.push(`<details class="card more"><summary>Payant, au prix Carte Avantage (${plan.paid.length})</summary><div class="opts">${plan.paid.map((o, i) => optHTML(o, `paid:${i}`)).join('')}</div></details>`);
   return parts.join('');
 }
 
