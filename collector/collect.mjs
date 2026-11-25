@@ -36,6 +36,7 @@ const NTFY_SERVER = (process.env.NTFY_SERVER || 'https://ntfy.sh').replace(/\/+$
 const APP_URL = process.env.APP_URL || '';
 const SNCF_CONNECT = 'https://www.sncf-connect.com/';
 const RAPPEL_VEILLE = '17:00';
+const RAPPEL_MINUIT = '23:55';
 const MIN_ROWS = +(process.env.MIN_ROWS || 5000);
 
 const log = (...a) => console.log('[robot]', ...a);
@@ -245,6 +246,45 @@ async function scheduleEveningWindow(rules, deps, meta) {
   return sent;
 }
 
+/* ---------- rappel de minuit ----------
+   Au relevé du matin, la date qui arrive à J-30 n'est presque pas ouverte (0,2 % des départs le 25/11/2026) ; le
+   relevé suivant la montre ouverte (12 %). Les places s'ouvrent donc entre deux relevés, souvent à minuit d'après
+   les abonnés. Le robot programme un rappel à 23 h 55 quand cette date est un jour de voyage suivi. */
+async function scheduleMidnightWindow(rules, deps, meta) {
+  const today = E.parisDay(), target = E.addDays(today, 30);
+  const at = E.parisToUTC(today, RAPPEL_MINUIT).getTime();
+  meta.minuit = (meta.minuit || []).slice(-14);
+  if (meta.minuit.includes(today) || at - Date.now() < 5 * 60e3) return 0;
+  meta.minuit.push(today);
+  const legs = E.tomorrowLegs(rules, deps, E.addDays(target, -1));
+  const byTopic = new Map();
+  for (const l of legs) {
+    const t = topicFor(rules[l.rule]);
+    if (!byTopic.has(t)) byTopic.set(t, []);
+    byTopic.get(t).push(l);
+  }
+  let sent = 0;
+  for (const [topic, list] of byTopic) {
+    const lines = list.map(l => {
+      const r = rules[l.rule];
+      const name = r.nom || `${E.pretty(r.de?.[0] || '?')} → ${E.pretty(r.vers?.[0] || '?')}`;
+      return `- ${l.sens === 'retour' ? '↩︎ retour ' : ''}${name} (${l.total} départ${l.total > 1 ? 's' : ''} dans ton créneau)`;
+    });
+    const ok = await ntfy({
+      title: `Minuit : les places du ${E.frDay(target)} vont s’ouvrir`,
+      message: `Les places MAX du ${E.frDayLong(target)} n’étaient pas encore ouvertes ce matin : elles arrivent d’ici demain matin, `
+        + `souvent à minuit. Regarde SNCF Connect vers 0 h : si elles s’ouvrent à cette heure-là, tu passes avant le rush du matin.\n\n${lines.join('\n')}`,
+      tags: ['crescent_moon', 'train'],
+      priority: 4,
+      click: SNCF_CONNECT,
+      actions: [{ action: 'view', label: 'Ouvrir SNCF Connect', url: SNCF_CONNECT }],
+      delay: String(Math.floor(at / 1000)),
+    }, topic);
+    if (ok) sent++;
+  }
+  return sent;
+}
+
 async function ntfy(msg, topic = NTFY_TOPIC) {
   if (process.env.NTFY_DRYRUN) { log('ALERTE (simulation) :', JSON.stringify(msg, null, 1)); return true; }
   if (!topic) { log('canal ntfy absent : alerte non envoyée'); return false; }
@@ -329,9 +369,11 @@ async function main() {
     const today = E.parisDay();
     const config = CONFIG ? await readJson(CONFIG, {}) : {};
     const rules = (config.alertes || []).filter(r => r && r.de?.length && r.vers?.length);
-    if (rules.length && !(meta.rappels || []).includes(today) && E.parisToUTC(today, RAPPEL_VEILLE).getTime() - Date.now() > 5 * 60e3) {
+    const pending = (k, hhmm) => !(meta[k] || []).includes(today) && E.parisToUTC(today, hhmm).getTime() - Date.now() > 5 * 60e3;
+    if (rules.length && (pending('rappels', RAPPEL_VEILLE) || pending('minuit', RAPPEL_MINUIT))) {
       const deps = E.normalizeRows(await fetchRows(remote.fields || []));
       log(`rappel de 17 h : ${await scheduleEveningWindow(rules, deps, meta)} notification(s) programmée(s)`);
+      log(`rappel de minuit : ${await scheduleMidnightWindow(rules, deps, meta)} notification(s) programmée(s)`);
       await writeJson(path.join(PUB, 'meta.json'), meta);
       await setOutput('changed', 'true');
       return;
@@ -414,6 +456,7 @@ async function main() {
   meta.odCount = [...files.values()].filter(f => Object.keys(f.x).length).length;
   meta.snaps.push({ i: idx, v: remote.version, day: snapDay, at: remote.at || null, rows: rows.length, deps: deps.length, open: openCount, counted: countTransitions });
   if (rules.length) log(`rappel de 17 h : ${await scheduleEveningWindow(rules, deps, meta)} notification(s) programmée(s)`);
+  if (rules.length) log(`rappel de minuit : ${await scheduleMidnightWindow(rules, deps, meta)} notification(s) programmée(s)`);
   meta.updated = new Date().toISOString();
   await writeJson(path.join(PUB, 'meta.json'), meta);
   log(`${meta.odCount} trajets suivis dans l'historique, ${changes.length} changements sur les alertes`);
