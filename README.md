@@ -23,6 +23,7 @@ SNCF open data (jeu « tgvmax », publié ~1×/jour vers 4 h 20 UTC)
         │     ├─ s'arrête en quelques secondes si rien n'a changé
         │     ├─ met à jour l'historique de chaque trajet (branche `data`)
         │     ├─ envoie les alertes ntfy (config.json)
+        │     ├─ programme un rappel ntfy à 17 h la veille de chaque jour de voyage suivi
         │     └─ publie le site sur GitHub Pages
         │
         └── App web (GitHub Pages) : interroge l'API SNCF en direct depuis ton téléphone
@@ -70,6 +71,9 @@ Tous les champs sauf `de` et `vers` sont facultatifs :
 - `fermetures: false` : seulement les ouvertures, pas les fermetures ;
 - `note` : un rappel pour toi, affiché dans l'onglet Suivi ;
 - `pour` : `"rob"` ou `"flo"`. L'alerte n'apparaît que dans ce compte et part sur son canal ntfy (`NTFY_TOPIC` pour Rob, `NTFY_TOPIC_FLO` pour Flo). Sans `pour`, elle va à Rob.
+
+La veille d'un jour de voyage suivi, le robot programme aussi un rappel pour 17 h : c'est l'heure où les réservations MAX
+non confirmées sont annulées, et les places libérées apparaissent en direct sur SNCF Connect (pas dans l'open data).
 
 ## Ce que disent (et ne disent pas) les données
 
