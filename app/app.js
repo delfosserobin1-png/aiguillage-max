@@ -13,6 +13,8 @@ const plural = (n, s, p = s + 's') => `${n} ${n > 1 ? p : s}`;
 /* ---------- comptes : Rob et Flo ont chacun leurs données sur le téléphone ---------- */
 const PROFILS = { rob: 'Rob', flo: 'Flo' };
 const PERSO = ['resas', 'partages', 'trajet', 'flex', 'altOff', 'recents', 'explore'];
+// ?compte=rob ou ?compte=flo : change de compte depuis un lien (porte de sortie si un écran bloque l'app)
+(() => { try { const q = new URLSearchParams(location.search), c = q.get('compte'); if (!PROFILS[c]) return; localStorage.setItem('aiguillage.profil', c); q.delete('compte'); history.replaceState(null, '', location.pathname + (q.size ? `?${q}` : '') + location.hash); } catch { /* stockage indisponible */ } })();
 const profil = (() => { try { const p = localStorage.getItem('aiguillage.profil'); return PROFILS[p] ? p : null; } catch { return null; } })();
 const store = {
   get(k, d) { try { const v = localStorage.getItem(`aiguillage.${profil || 'invite'}.${k}`); return v == null ? d : JSON.parse(v); } catch { return d; } },
