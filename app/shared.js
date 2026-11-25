@@ -6,7 +6,7 @@
 
 export const API_BASE = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/tgvmax';
 export const WANTED_FIELDS = ['date', 'train_no', 'origine_iata', 'destination_iata', 'origine', 'destination',
-  'heure_depart', 'heure_arrivee', 'od_happy_card', 'axe'];
+  'heure_depart', 'heure_arrivee', 'od_happy_card', 'axe', 'entity'];
 export const REQUIRED_FIELDS = ['date', 'train_no', 'origine', 'destination', 'heure_depart', 'heure_arrivee', 'od_happy_card'];
 
 /* Règles MAX JEUNE (aide SNCF Connect, novembre 2026). */
@@ -101,6 +101,12 @@ export function pretty(name) {
 /* Lien SNCF Connect pré-rempli : la même phrase que dans sa barre de recherche (« Paris Lyon le 26 novembre à 19h »)
    ouvre directement la liste des trains. */
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+/* Carte Avantage (Jeune, Adulte, Senior) : prix maximum garanti en 2de sur TGV INOUI et INTERCITÉS, selon la durée du
+   trajet direct : 49 € sous 1 h 30, 69 € de 1 h 30 à 3 h, 89 € au-delà. Rien pour les cars (entité AUTOCAR SNCF). */
+export function capAvantage(leg) {
+  if (!leg || /AUTOCAR/i.test(leg.entity || '') || !Number.isFinite(leg.dur)) return null;
+  return leg.dur < 90 ? 49 : leg.dur <= 180 ? 69 : 89;
+}
 export function sncfConnectLink(o, d, date, hhmm) {
   const name = st => pretty(String(st).replace(/\s*\(intramuros\)\s*/i, ' ').replace(/\bSTE\b/g, 'SAINTE').replace(/\bST\b/g, 'SAINT').trim());
   const [, m, day] = String(date).split('-').map(Number);
@@ -157,7 +163,7 @@ export function normalizeRows(rows) {
     const key = `${date}|${oi}|${di}|${dep}|${arr}`;
     let x = map.get(key);
     if (!x) {
-      x = { key, date, o, d, oi, di, dep, arr, depMin, arrMin, trains: [], ok: false, axe: clean(r.axe) };
+      x = { key, date, o, d, oi, di, dep, arr, depMin, arrMin, trains: [], ok: false, axe: clean(r.axe), entity: clean(r.entity) };
       x.dur = ((arrMin - depMin) + 1440) % 1440;
       x.night = arrMin < depMin;
       map.set(key, x);
@@ -280,6 +286,26 @@ export function pReopen(J, wd, sl, odC, globalC) {
 export function pStillOpenTomorrow(J, wd, sl, odC, globalC) {
   if (J <= 0) return null;
   return 1 - transitionRates(odC, globalC, wd, sl, bucketOf(J - 1)).close;
+}
+/* Jauge d'un jour, sur l'échelle du simulateur MAX JEUNE de la SNCF (trois niveaux), calculée sur les départs directs
+   du relevé : aucun ouvert = « Déjà au max » ; 2 ouverts ou moins, ou moins d'un quart = « Dernières places ». */
+export function dayGauge(deps) {
+  const total = deps.length, open = deps.filter(x => x.ok).length;
+  if (!total) return null;
+  const level = open === 0 ? 'max' : open <= 2 || open / total < 0.25 ? 'dernieres' : 'places';
+  return { level, open, total, label: { places: 'Un max de places', dernieres: 'Dernières places', max: 'Déjà au max' }[level] };
+}
+/* Solidité d'un départ ouvert : chance qu'il soit encore ouvert au relevé suivant, d'après l'historique du même trajet
+   (jour de la semaine, créneau, distance au départ). Durée typique = 1 / probabilité de fermeture par jour. */
+export function solidity(leg, today, odC, globalC) {
+  if (!hasHistory(odC, globalC)) return null;
+  const p = pStillOpenTomorrow(diffDays(leg.date, today), isoWeekday(leg.date), slotOf(leg.depMin), odC, globalC);
+  if (p == null) return null;
+  const close = 1 - p, days = close > 0 ? 1 / close : Infinity;
+  const level = close >= 0.5 ? 'fragile' : close >= 0.25 ? 'moyen' : 'solide';
+  const label = level === 'fragile' ? 'part souvent dans la journée'
+    : days >= 7 ? 'tient d’habitude plus d’une semaine' : `tient d’habitude ${Math.round(days)} jours`;
+  return { p, close, days, level, label };
 }
 export function reliability(n) { return n >= 120 ? 'bonne' : n >= 30 ? 'moyenne' : 'faible'; }
 
