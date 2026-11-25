@@ -197,3 +197,19 @@ test('explorer : plusieurs créneaux à la fois', () => {
   assert.deepEqual(deps([['11:00', '14:30']]), ['12:30']);
   assert.deepEqual(E.exploreDestinations(out, [], { ...q, outFrom: '00:00', outTo: '23:59' })[0].out.length, 3);
 });
+
+test('veille de voyage : départs de demain suivis, par règle et par sens', () => {
+  const rule = { de: ['PARIS'], vers: ['LYON'], sens: 'aller-retour', jours: ['ven'], jours_retour: ['dim'], heures: ['17:00', '23:59'] };
+  const deps = E.normalizeRows([
+    row('PARIS', 'LYON', '18:00', '19:56', true, 1, '2026-12-04'),
+    row('PARIS', 'LYON', '19:00', '20:56', false, 2, '2026-12-04'),
+    row('PARIS', 'LYON', '08:00', '09:56', true, 3, '2026-12-04'),
+    row('LYON', 'PARIS', '18:00', '19:56', true, 4, '2026-12-06'),
+  ]);
+  const fri = E.tomorrowLegs([rule], deps, '2026-12-03');
+  assert.equal(fri.length, 1);
+  assert.deepEqual([fri[0].sens, fri[0].open, fri[0].total], ['aller', 1, 2]);
+  const sun = E.tomorrowLegs([rule], deps, '2026-12-05');
+  assert.deepEqual(sun.map(l => [l.sens, l.open, l.total]), [['retour', 1, 1]]);
+  assert.equal(E.tomorrowLegs([rule], deps, '2026-12-04').length, 0);
+});
