@@ -294,8 +294,9 @@ async function sendAlerts(rules, changes, openNowByRule) {
       title: `${name} : ${opens.length ? `${opens.length} départ${opens.length > 1 ? 's' : ''} à 0 € ouvert${opens.length > 1 ? 's' : ''}` : `${closes.length} départ${closes.length > 1 ? 's' : ''} fermé${closes.length > 1 ? 's' : ''}`}`,
       message: parts.join('\n\n').slice(0, 3900),
       tags: [opens.length ? 'green_circle' : 'red_circle', 'train'],
-      priority: opens.length ? 4 : 2,
-      click: deepLink(rule, first) || undefined,
+      priority: opens.length ? 5 : 2,
+      click: opens.length ? SNCF_CONNECT : deepLink(rule, first) || undefined,
+      actions: opens.length ? [{ action: 'view', label: 'Ouvrir SNCF Connect', url: SNCF_CONNECT }, ...(deepLink(rule, first) ? [{ action: 'view', label: 'Voir dans FloRoBot', url: deepLink(rule, first) }] : [])] : undefined,
     }, topicFor(rule));
     if (ok) sent++;
   }
@@ -306,8 +307,21 @@ async function sendAlerts(rules, changes, openNowByRule) {
 
 async function main() {
   const meta = await readJson(path.join(PUB, 'meta.json'), { v: 1, snaps: [] });
-  const remote = await fetchMeta();
+  let remote = await fetchMeta();
   const lastSnap = meta.snaps[meta.snaps.length - 1];
+  // Le matin, GitHub saute souvent des passages programmés : un passage lancé avant la publication du jour
+  // guette la SNCF (toutes les 20 s) au lieu de repartir, pour alerter dans la minute qui suit la publication.
+  const waitMin = Math.min(+(args.attendre || 0), 100);
+  const nowMin = E.parisMinutes();
+  if (waitMin > 0 && lastSnap && lastSnap.v === remote.version && lastSnap.day !== E.parisDay() && nowMin >= 5 * 60 && nowMin < 8 * 60 + 30) {
+    const until = Math.min(Date.now() + waitMin * 60e3, E.parisToUTC(E.parisDay(), '08:30').getTime());
+    log(`Publication du jour pas encore là : je guette la SNCF jusqu'à ${E.fmtMin(E.parisMinutes(new Date(until)))}.`);
+    while (Date.now() < until && remote.version === lastSnap.v) {
+      await sleep(20000);
+      try { remote = await fetchMeta(); } catch (e) { log(`métadonnées injoignables : ${e.message}`); }
+    }
+    log(remote.version !== lastSnap.v ? 'Nouvelle publication détectée.' : 'Toujours rien : le prochain passage reprendra.');
+  }
   log(`version SNCF : ${remote.version}${lastSnap ? ` (dernier relevé : ${lastSnap.v})` : ' (premier relevé)'}`);
   await setOutput('version', remote.version);
   if (lastSnap && lastSnap.v === remote.version) {
