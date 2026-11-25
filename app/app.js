@@ -534,7 +534,7 @@ function optHTML(o, key, top) {
 function optionsHTML() {
   const { plan } = T.last;
   const parts = [];
-  if (plan.free.length) parts.push(`<div class="card"><h2>Options à 0 € <small>${plural(plan.free.length, 'option')} dispo</small></h2><div class="opts">${plan.free.map((o, i) => optHTML(o, `free:${i}`, i === 0)).join('')}</div></div>`);
+  if (plan.free.length) parts.push(`<div class="card"><h2>${plural(plan.free.length, 'option')} à 0 € <small>${plan.free.length > 1 ? 'disponibles' : 'disponible'} à l’heure d’import${S.apiMeta?.at ? ` (${E.fmtMin(E.parisMinutes(new Date(S.apiMeta.at)))})` : ''}</small></h2><div class="opts">${plan.free.map((o, i) => optHTML(o, `free:${i}`, i === 0)).join('')}</div></div>`);
   else if (plan.verdict.code !== 'trop-tot' && plan.verdict.code !== 'passe') parts.push(`<div class="card"><h2>Options à 0 €</h2><p class="lead">Aucune avec tes critères. Élargis ce que tu acceptes (horaires, gares voisines, correspondances) ou regarde le radar pour un autre jour.</p></div>`);
   if (plan.partial.length) parts.push(`<details class="card more"><summary>En partie gratuit (${plan.partial.length})</summary><div class="opts">${plan.partial.map((o, i) => optHTML(o, `partial:${i}`)).join('')}</div></details>`);
   if (plan.paid.length) parts.push(`<details class="card more"><summary>Payant au tarif -30 % (${plan.paid.length})</summary><div class="opts">${plan.paid.map((o, i) => optHTML(o, `paid:${i}`)).join('')}</div></details>`);
