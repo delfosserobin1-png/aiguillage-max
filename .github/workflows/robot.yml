@@ -102,6 +102,10 @@ jobs:
           printf '%s' "$PAUSE_JSON" > _site/pause.json
           node -e "const v=JSON.parse(require('fs').readFileSync('_site/pause.json','utf8'));if(!v||typeof v!=='object')throw 0" 2>/dev/null || echo '{}' > _site/pause.json
           if [ -d state/public ]; then cp -r state/public/. _site/data/; fi
+          # réseau complet (TER, cars, toutes les gares) d'après le GTFS national SNCF ; en cas d'échec, l'appli s'en passe
+          if curl -sSfL --retry 2 -o gtfs.zip https://eu.ftp.opendatasoft.com/sncf/plandata/Export_OpenData_SNCF_GTFS_NewTripId.zip && unzip -q -o gtfs.zip -d gtfs; then
+            node collector/reseau.mjs --gtfs gtfs --state state --out _site/data/reseau || echo "index du réseau non construit"
+          fi
           echo "{\"commit\":\"${GITHUB_SHA::7}\",\"built\":\"$(date -u +%FT%TZ)\"}" > _site/version.json
 
       - name: Préparer la publication
