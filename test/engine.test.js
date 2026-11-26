@@ -221,6 +221,23 @@ test('lien SNCF Connect pré-rempli', () => {
     'https://www.sncf-connect.com/home/search?userInput=Saint+Pierre+Des+Corps+Saumur+le+6+d%C3%A9cembre');
 });
 
+test('grille officielle des prix', () => {
+  assert.equal(E.tarifPattern('PARIS (intramuros)'), 'PARIS*');
+  assert.equal(E.tarifPattern('LYON ST EXUPERY TGV.'), 'LYON ST EXUPERY TGV');
+  assert.equal(E.tarifPattern('ST PIERRE DES CORPS'), 'ST PIERRE DES CORPS');
+  const rows = [
+    { transporteur: 'TGV INOUI', profil_tarifaire: 'Tarif Avantage', prix_minimum: 10.5, prix_maximum: 51 },
+    { transporteur: 'TGV INOUI', profil_tarifaire: 'Tarif Avantage', prix_minimum: 12, prix_maximum: 49 },
+    { transporteur: 'TGV INOUI', profil_tarifaire: 'Tarif Normal', prix_minimum: 15, prix_maximum: 74 },
+    { transporteur: 'OUIGO', profil_tarifaire: 'Tarif Normal', prix_minimum: 16, prix_maximum: 69 },
+  ];
+  assert.deepEqual(E.pickFare(rows), { min: 10.5, max: 51, kind: 'avantage' });
+  assert.deepEqual(E.pickFare(rows.slice(3)), { min: 16, max: 69, kind: 'ouigo' });
+  assert.equal(E.pickFare([]), null);
+  assert.equal(E.euros(10.5), '10,50');
+  assert.equal(E.euros(51), '51');
+});
+
 test('prix maximum Carte Avantage selon la durée', () => {
   assert.equal(E.capAvantage({ dur: 89 }), 49);
   assert.equal(E.capAvantage({ dur: 90 }), 69);
