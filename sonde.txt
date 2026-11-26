@@ -1,0 +1,133 @@
+curl 0
+g.zip: Zip archive data, made by v3.0 UNIX, extract using at least v2.0, last modified Nov 26 2026 21:56:12, uncompressed size 10135992, method=deflate
+trips.txtUT	
+== zip
+-rw-r--r-- 1 runner runner 5532262 Nov 26 20:59 g.zip
+Archive:  g.zip
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+ 10135992  2026-11-26 20:56   trips.txt
+ 82844577  2026-11-26 20:55   stop_times.txt
+  4719091  2026-11-26 20:55   calendar_dates.txt
+       81  2026-11-26 20:56   transfers.txt
+    68728  2026-11-26 20:55   routes.txt
+   727291  2026-11-26 20:56   stops.txt
+      194  2026-11-26 20:56   feed_info.txt
+      504  2026-11-26 20:56   agency.txt
+---------                     -------
+ 98496458                     8 files
+
+== agency.txt (9 lignes)
+agency_id,agency_name,agency_url,agency_timezone,agency_lang
+1185,CFF,http://www.sncf.com,Europe/Paris,fr
+1187,SNCF VOYAGEURS,http://www.sncf.com,Europe/Paris,fr
+5111,SNCF Voyageurs SA,http://www.sncf.com,Europe/Paris,fr
+
+== calendar_dates.txt (262171 lignes)
+service_id,date,exception_type
+000001,20261221,1
+000001,20261222,1
+000001,20261223,1
+
+== feed_info.txt (2 lignes)
+feed_id,feed_publisher_name,feed_publisher_url,feed_lang,feed_start_date,feed_end_date,feed_version,conv_rev,plan_rev
+0,SNCF,http://www.sncf.com,fr,20261126,20270430,2026-11-26,1.179,1795726339
+
+== routes.txt (723 lignes)
+route_id,agency_id,route_short_name,route_long_name,route_desc,route_type,route_url,route_color,route_text_color
+FR:Line::00F2577A-6A87-42E0-95F3-07351E4BC2F6:,1187,P53,Bening - Sarreguemines,,3,,006600,FFFFFF
+FR:Line::00F7208C-CEBC-4521-A792-6EC3ABB65811:,1187,C30,Saint-Étienne - Roanne,,2,,0749FF,FFFFFF
+FR:Line::0128E1D5-9183-4D58-B1CF-F5AA5A64A037:,1187,C6,Marseille - Toulon - Hyeres,,2,,0749FF,FFFFFF
+
+== stop_times.txt (512179 lignes)
+trip_id,arrival_time,departure_time,stop_id,stop_sequence,stop_headsign,pickup_type,drop_off_type,shape_dist_traveled
+OCESN105241F1187_F:NAV:FR:Line::85d3579c-996b-4671-89af-839855ede78a::87571000:87571240:2:1959:20270430,19:54:00,19:54:00,StopPoint:OCENavette-87571000,0,,0,1,
+OCESN105241F1187_F:NAV:FR:Line::85d3579c-996b-4671-89af-839855ede78a::87571000:87571240:2:1959:20270430,19:59:00,19:59:00,StopPoint:OCENavette-87571240,1,,1,0,
+OCESN105342F1187_F:NAV:FR:Line::85d3579c-996b-4671-89af-839855ede78a::87571240:87571000:2:1732:20270430,17:27:00,17:27:00,StopPoint:OCENavette-87571240,0,,0,1,
+
+== stops.txt (8602 lignes)
+stop_id,stop_name,stop_desc,stop_lat,stop_lon,zone_id,stop_url,location_type,parent_station
+StopArea:OCE71043075,FIGUERES-VILAFANT,,42.26458100,2.943028000,,,1,
+StopPoint:OCETGV INOUI-71043075,FIGUERES-VILAFANT,,42.26458100,2.943028000,,,0,StopArea:OCE71043075
+StopArea:OCE71718010,Barcelone-Sants,,41.37896100,2.139834000,,,1,
+
+== transfers.txt (0 lignes)
+from_stop_id,to_stop_id,transfer_type,min_transfer_time,from_route_id,to_route_id
+== trips.txt (58750 lignes)
+route_id,service_id,trip_id,trip_headsign,direction_id,block_id,shape_id
+FR:Line::85d3579c-996b-4671-89af-839855ede78a:,000001,OCESN105241F1187_F:NAV:FR:Line::85d3579c-996b-4671-89af-839855ede78a::87571000:87571240:2:1959:20270430,105241,0,1,
+FR:Line::85d3579c-996b-4671-89af-839855ede78a:,000002,OCESN105342F1187_F:NAV:FR:Line::85d3579c-996b-4671-89af-839855ede78a::87571240:87571000:2:1732:20270430,105342,1,2,
+FR:Line::85d3579c-996b-4671-89af-839855ede78a:,000003,OCESN105342F1187_F:NAV:FR:Line::85d3579c-996b-4671-89af-839855ede78a::87571240:87571000:2:1728:20261212,105342,1,3,
+
+== types de points d'arrêt dans stop_times (préfixe avant le code UIC)
+ 384209 StopPoint:OCETrain TER
+  55253 StopPoint:OCETGV INOUI
+  43275 StopPoint:OCECar TER
+   8583 StopPoint:OCEINTERCITES
+   8319 StopPoint:OCETramTrain
+   3472 StopPoint:OCEOUIGO
+   3155 StopPoint:OCEINTERCITES de nuit
+   2915 StopPoint:OCEICE
+   1507 StopPoint:OCELyria
+   1112 StopPoint:OCECar à réservation
+    244 StopPoint:OCENavette
+    134 StopPoint:OCETrain
+
+== route_type et agences
+route_id,agency_id,route_short_name,route_long_name,route_desc,route_type,route_url,route_color,route_text_color
+    509 1187 | FFFFFF
+    139 1187 | 
+     46 OCEdefault | 
+     11 5733 | FFFFFF
+     10 5235 | FFFFFF
+      3 5111 | FFFFFF
+      2 5270 | 
+      1 5429 | FFFFFF
+      1 1185 | FFFFFF
+
+== arrêts Blois, Vendôme, Paris
+StopArea:OCE87391003,Paris Montparnasse Hall 1 - 2,,48.84117200,2.320514000,,,1,
+StopPoint:OCECar TER-87391003,Paris Montparnasse Hall 1 - 2,,48.84117200,2.320514000,,,0,StopArea:OCE87391003
+StopPoint:OCEOUIGO-87391003,Paris Montparnasse Hall 1 - 2,,48.84117200,2.320514000,,,0,StopArea:OCE87391003
+StopPoint:OCETGV INOUI-87391003,Paris Montparnasse Hall 1 - 2,,48.84117200,2.320514000,,,0,StopArea:OCE87391003
+StopPoint:OCETrain TER-87391003,Paris Montparnasse Hall 1 - 2,,48.84117200,2.320514000,,,0,StopArea:OCE87391003
+StopArea:OCE87571216,Vendôme - Villiers-sur-Loir,,47.82193700,1.021143000,,,1,
+StopPoint:OCETGV INOUI-87571216,Vendôme - Villiers-sur-Loir,,47.82193700,1.021143000,,,0,StopArea:OCE87571216
+StopArea:OCE87574004,Blois - Chambord,,47.58544900,1.323759000,,,1,
+StopPoint:OCECar TER-87574004,Blois - Chambord,,47.58544900,1.323759000,,,0,StopArea:OCE87574004
+StopPoint:OCEOUIGO-87574004,Blois - Chambord,,47.58544900,1.323759000,,,0,StopArea:OCE87574004
+StopPoint:OCETrain TER-87574004,Blois - Chambord,,47.58544900,1.323759000,,,0,StopArea:OCE87574004
+StopArea:OCE87574558,Vendôme,,47.80195900,1.068219000,,,1,
+StopPoint:OCETrain TER-87574558,Vendôme,,47.80195900,1.068219000,,,0,StopArea:OCE87574558
+StopArea:OCE87574640,Saint-Amand de Vendôme,,47.69297200,1.011978000,,,1,
+StopPoint:OCETrain TER-87574640,Saint-Amand de Vendôme,,47.69297200,1.011978000,,,0,StopArea:OCE87574640
+StopArea:OCE87686006,Paris Gare de Lyon Hall 1 - 2,,48.84494500,2.373481000,,,1,
+StopPoint:OCEINTERCITES-87686006,Paris Gare de Lyon Hall 1 - 2,,48.84494500,2.373481000,,,0,StopArea:OCE87686006
+StopPoint:OCELyria-87686006,Paris Gare de Lyon Hall 1 - 2,,48.84494500,2.373481000,,,0,StopArea:OCE87686006
+StopPoint:OCEOUIGO-87686006,Paris Gare de Lyon Hall 1 - 2,,48.84494500,2.373481000,,,0,StopArea:OCE87686006
+StopPoint:OCETGV INOUI-87686006,Paris Gare de Lyon Hall 1 - 2,,48.84494500,2.373481000,,,0,StopArea:OCE87686006
+
+== exemple de trajet TER passant par Blois
+UIC Blois 87574004
+grep: write error: Broken pipe
+trip OCESN4071F1187_F:OGO:FR:Line::2381a54a-1f59-4452-88c7-303179dd472b::87547000:87481002:8:1109:20261207
+OCESN4071F1187_F:OGO:FR:Line::2381a54a-1f59-4452-88c7-303179dd472b::87547000:87481002:8:1109:20261207,07:12:00,07:12:00,StopPoint:OCEOUIGO-87547000,0,,0,1,
+OCESN4071F1187_F:OGO:FR:Line::2381a54a-1f59-4452-88c7-303179dd472b::87547000:87481002:8:1109:20261207,07:25:00,07:28:00,StopPoint:OCEOUIGO-87545244,1,,0,1,
+OCESN4071F1187_F:OGO:FR:Line::2381a54a-1f59-4452-88c7-303179dd472b::87547000:87481002:8:1109:20261207,08:19:00,08:22:00,StopPoint:OCEOUIGO-87543017,2,,0,0,
+OCESN4071F1187_F:OGO:FR:Line::2381a54a-1f59-4452-88c7-303179dd472b::87547000:87481002:8:1109:20261207,08:54:00,08:56:00,StopPoint:OCEOUIGO-87574004,3,,0,0,
+OCESN4071F1187_F:OGO:FR:Line::2381a54a-1f59-4452-88c7-303179dd472b::87547000:87481002:8:1109:20261207,09:22:00,09:24:00,StopPoint:OCEOUIGO-87571240,4,,0,0,
+OCESN4071F1187_F:OGO:FR:Line::2381a54a-1f59-4452-88c7-303179dd472b::87547000:87481002:8:1109:20261207,09:58:00,10:00:00,StopPoint:OCEOUIGO-87487603,5,,0,0,
+OCESN4071F1187_F:OGO:FR:Line::2381a54a-1f59-4452-88c7-303179dd472b::87547000:87481002:8:1109:20261207,10:24:00,10:27:00,StopPoint:OCEOUIGO-87484006,6,,0,0,
+OCESN4071F1187_F:OGO:FR:Line::2381a54a-1f59-4452-88c7-303179dd472b::87547000:87481002:8:1109:20261207,11:09:00,11:09:00,StopPoint:OCEOUIGO-87481002,7,,1,0,
+
+== exemple de train 6616
+FR:Line::03A83359-7D9D-4301-9C87-92FED4666451:,000461,OCESN3393F1187_F:TER:FR:Line::03A83359-7D9D-4301-9C87-92FED4666451::87384008:87444372:6:2255:20270214,3393,0,6616,
+FR:Line::5B76AFB9-244D-4AC6-9720-8142DC7F6A91:,003432,OCESN6616F1187_F:OUI:FR:Line::5B76AFB9-244D-4AC6-9720-8142DC7F6A91::87723197:87686006:2:1330:20270430,6616,1,15327,
+FR:Line::5B76AFB9-244D-4AC6-9720-8142DC7F6A91:,003445,OCESN6616F1187_F:OUI:FR:Line::5B76AFB9-244D-4AC6-9720-8142DC7F6A91::87723197:87686006:2:1330:20270223,6616,1,15328,
+
+== plage de calendar_dates
+20261126
+20270430
+
+== tailles
+94M	.
