@@ -103,6 +103,22 @@ export function pretty(name) {
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 /* Carte Avantage (Jeune, Adulte, Senior) : prix maximum garanti en 2de sur TGV INOUI et INTERCITÉS, selon la durée du
    trajet direct : 49 € sous 1 h 30, 69 € de 1 h 30 à 3 h, 89 € au-delà. Rien pour les cars (entité AUTOCAR SNCF). */
+// grille officielle SNCF (open data) : fourchette de prix par trajet ; « Tarif Avantage » = prix avec la Carte Avantage
+export const TARIFS_API = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/tarifs-tgv-inoui-ouigo/records';
+export function tarifPattern(name) {
+  const f = fold(name), intra = /\(INTRAMUROS\)/.test(f);
+  const n = f.replace(/\s*\(INTRAMUROS\)\s*/, ' ').replace(/[.\s]+$/, '').trim();
+  return intra ? n + '*' : n;
+}
+export function pickFare(rows) {
+  let rs = (rows || []).filter(r => r.profil_tarifaire === 'Tarif Avantage' && /INOUI/i.test(r.transporteur)), kind = 'avantage';
+  if (!rs.length) { rs = (rows || []).filter(r => r.profil_tarifaire === 'Tarif Normal' && /OUIGO/i.test(r.transporteur)); kind = 'ouigo'; }
+  if (!rs.length) return null;
+  const min = Math.min(...rs.map(r => +r.prix_minimum)), max = Math.max(...rs.map(r => +r.prix_maximum));
+  return Number.isFinite(min) && Number.isFinite(max) ? { min, max, kind } : null;
+}
+export const euros = n => (Math.round(n * 100) % 100 ? (Math.round(n * 100) / 100).toFixed(2).replace('.', ',') : String(Math.round(n)));
+
 export function capAvantage(leg) {
   if (!leg || /AUTOCAR/i.test(leg.entity || '') || !Number.isFinite(leg.dur)) return null;
   return leg.dur < 90 ? 49 : leg.dur <= 180 ? 69 : 89;
