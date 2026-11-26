@@ -18,11 +18,11 @@ jobs:
     steps:
       - name: Décrire le GTFS
         run: |
-          set -u
+          set +e
           mkdir -p out g
           O=out/sonde.txt
           URL=https://eu.ftp.opendatasoft.com/sncf/plandata/Export_OpenData_SNCF_GTFS_NewTripId.zip
-          curl -sSL -o g.zip "$URL"
+          curl -sSL -o g.zip "$URL"; echo "curl $?" >> $O; file g.zip >> $O; head -c 300 g.zip | strings | head -5 >> $O
           { echo "== zip"; ls -la g.zip; unzip -l g.zip; } >> $O
           unzip -q g.zip -d g
           cd g
@@ -49,6 +49,7 @@ jobs:
             echo; echo "== tailles"; du -sh .
           } >> ../$O 2>&1
       - name: Ranger le résultat
+        if: always()
         run: |
           cd out
           git init -q -b sonde
