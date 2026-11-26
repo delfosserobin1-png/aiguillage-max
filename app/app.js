@@ -115,6 +115,22 @@ const S = {
   config: null, cache: new Map(),
 };
 
+// fourchettes de prix officielles des tronçons payants, chargées après l'analyse (une requête par trajet)
+async function loadFares(plan) {
+  T.fares ||= new Map();
+  const legs = [...plan.free, ...plan.partial, ...plan.paid].flatMap(o => o.legs).filter(l => !l.ok);
+  const pairs = [...new Set(legs.map(l => `${l.o}|${l.d}`))].filter(k => !T.fares.has(k)).slice(0, 10);
+  await Promise.all(pairs.map(async k => {
+    const [o, d] = k.split('|');
+    const q = (a, b) => getJSON(`${E.TARIFS_API}?where=${encodeURIComponent(`gare_origine like ${E.sqlStr(E.tarifPattern(a))} and gare_destination like ${E.sqlStr(E.tarifPattern(b))} and classe="2"`)}&limit=100`).then(j => E.pickFare(j.results)).catch(() => null);
+    // la grille omet parfois un sens : on regarde l'autre sens si le TGV INOUI manque
+    let f = await q(o, d);
+    if (!f || f.kind !== 'avantage') { const r = await q(d, o); if (r && (!f || r.kind === 'avantage')) f = r; }
+    T.fares.set(k, f);
+  }));
+  return pairs.length;
+}
+
 async function getJSON(url, { cache = true } = {}) {
   if (cache && S.cache.has(url)) return S.cache.get(url);
   const p = fetch(url).then(async r => {
@@ -394,6 +410,7 @@ async function analyse() {
     T.last = { q, plan, direct, odFiles, odC, globalC, today };
     renderTrajet();
     out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    loadFares(plan).then(n => { if (n && id === runId) renderTrajet(); });
   } catch (e) {
     if (id === runId) out.innerHTML = errorBanner(e);
     console.error(e);
@@ -513,14 +530,17 @@ function stepsHTML() {
 function optHTML(o, key, top) {
   const { q, plan } = T.last;
   const fromM = E.toMin(q.from);
-  // prix des tronçons payants : plafond Carte Avantage Jeune (le prix exact, qui varie, est sur SNCF Connect)
-  const caps = o.legs.filter(l => !l.ok).map(E.capAvantage);
-  const capSum = caps.length && caps.every(c => c != null) ? caps.reduce((a, c) => a + c, 0) : null;
+  // prix des tronçons payants : fourchette de la grille officielle SNCF (Tarif Avantage), sinon plafond Carte Avantage
+  const fareOf = l => T.fares?.get(`${l.o}|${l.d}`) || null;
+  const rng = l => { const f = fareOf(l); if (f) return [f.min, f.max]; const c = E.capAvantage(l); return c != null ? [null, c] : null; };
+  const fmtR = r => r[0] != null ? `${E.euros(r[0])}–${E.euros(r[1])} €` : `${E.euros(r[1])} € max`;
+  const ranges = o.legs.filter(l => !l.ok).map(rng);
+  const sumR = ranges.length && ranges.every(Boolean) ? [ranges.every(r => r[0] != null) ? ranges.reduce((a, r) => a + r[0], 0) : null, ranges.reduce((a, r) => a + r[1], 0)] : null;
   const price = o.free ? '<span class="price free">0 €</span>'
-    : o.kind === 'mixed' ? `<span class="price part">0 € + ${capSum != null ? `${capSum} € max` : 'payant'}</span>`
-    : `<span class="price paid">${capSum != null ? `${capSum} € max` : 'payant'}</span>`;
+    : o.kind === 'mixed' ? `<span class="price part">0 € + ${sumR ? fmtR(sumR) : 'payant'}</span>`
+    : `<span class="price paid">${sumR ? fmtR(sumR) : 'payant'}</span>`;
   // le lien ouvre SNCF Connect une heure plus tôt, pour voir aussi les trains voisins (0 €, OUIGO moins chers)
-  const paidTxt = l => { const c = E.capAvantage(l); return `, payant : ${c != null ? `${c} € max avec la Carte Avantage` : 'prix sur SNCF Connect'} · <a href="${esc(E.sncfConnectLink(l.o, l.d, l.date, E.fmtMin(Math.max(0, E.toMin(l.dep) - 60))))}" target="_blank" rel="noopener">comparer les prix</a>`; };
+  const paidTxt = l => { const f = fareOf(l), c = E.capAvantage(l); return `, payant : ${f ? `${fmtR([f.min, f.max])} ${f.kind === 'ouigo' ? 'en OUIGO (sans réduction)' : 'avec ta Carte Avantage'}, selon la grille SNCF` : c != null ? `${c} € max avec la Carte Avantage` : 'prix sur SNCF Connect'} · <a href="${esc(E.sncfConnectLink(l.o, l.d, l.date, E.fmtMin(Math.max(0, E.toMin(l.dep) - 60))))}" target="_blank" rel="noopener">comparer les prix</a>`; };
   const l0 = o.legs[0], lN = o.legs[o.legs.length - 1];
   const legs = o.kind === 'extend'
     ? `<li><span class="st ok"></span><span><b>${l0.dep}</b> ${P(l0.o)} → descente à ${P(o.getOff)} <b>${E.fmtMin(o.getOffAt)}</b></span></li><li class="via">Billet jusqu'à ${P(l0.d)} (${l0.arr}), train ${esc(l0.trains.join('/'))}</li>`
