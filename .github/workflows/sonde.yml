@@ -1,0 +1,57 @@
+name: Sonde horaires SNCF
+
+# Sonde ponctuelle : décrit le fichier GTFS national de la SNCF (fichiers, colonnes, exemples)
+# et range le résultat dans la branche « sonde ». À supprimer une fois l'index TER en place.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/sonde.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  sonde:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Décrire le GTFS
+        run: |
+          set -u
+          mkdir -p out g
+          O=out/sonde.txt
+          URL=https://eu.ftp.opendatasoft.com/sncf/plandata/Export_OpenData_SNCF_GTFS_NewTripId.zip
+          curl -sSL -o g.zip "$URL"
+          { echo "== zip"; ls -la g.zip; unzip -l g.zip; } >> $O
+          unzip -q g.zip -d g
+          cd g
+          for f in *.txt; do
+            { echo; echo "== $f ($(wc -l < "$f") lignes)"; head -4 "$f"; } >> ../$O
+          done
+          {
+            echo; echo "== types de points d'arrêt dans stop_times (préfixe avant le code UIC)"
+            awk -F, 'NR>1{print $4}' stop_times.txt | sed -E 's/-?[0-9]{8}.*$//' | sort | uniq -c | sort -rn | head -30
+            echo; echo "== route_type et agences"
+            head -1 routes.txt
+            awk -F, 'NR>1{print $2" | "$NF}' routes.txt | sort | uniq -c | sort -rn | head -30
+            echo; echo "== arrêts Blois, Vendôme, Paris"
+            grep -i -E "blois|vend[oô]me|stoparea:oce87686006|stoparea:oce87391003" stops.txt | head -20
+            echo; echo "== exemple de trajet TER passant par Blois"
+            U=$(grep -i "blois" stops.txt | grep -o '87[0-9]\{6\}' | head -1)
+            echo "UIC Blois $U"
+            T=$(grep "$U" stop_times.txt | head -1 | cut -d, -f1)
+            echo "trip $T"; grep "^$T," trips.txt; grep "^$T," stop_times.txt | head -40
+            echo; echo "== exemple de train 6616"
+            grep -E ",6616,|,\"6616\"," trips.txt | head -3
+            echo; echo "== plage de calendar_dates"
+            awk -F, 'NR>1{print $2}' calendar_dates.txt | sort | uniq | sed -n '1p;$p'
+            echo; echo "== tailles"; du -sh .
+          } >> ../$O 2>&1
+      - name: Ranger le résultat
+        run: |
+          cd out
+          git init -q -b sonde
+          git add -A
+          git -c user.name="robot-aiguillage" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Sonde GTFS"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" sonde
