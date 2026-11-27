@@ -221,6 +221,23 @@ test('lien SNCF Connect pré-rempli', () => {
     'https://www.sncf-connect.com/home/search?userInput=Saint+Pierre+Des+Corps+Saumur+le+6+d%C3%A9cembre');
 });
 
+test('trajets avec un TER', () => {
+  assert.equal(E.runsOn('3', '2026-12-01', '2026-12-02'), true);
+  assert.equal(E.runsOn('1', '2026-12-01', '2026-12-02'), false);
+  assert.ok(E.netFare(60).min > 4 && E.netFare(60).max < 12);
+  const net = { hubs: [['PARIS (intramuros)', '87547000'], ['LES AUBRAIS ORLEANS', '87543017']],
+    stations: [['87547000', 'Paris Austerlitz', 48.84, 2.36], ['87543017', 'Les Aubrais', 47.92, 1.9], ['87574004', 'Blois - Chambord', 47.58, 1.32]] };
+  // TER Les Aubrais 9:10 -> Blois 9:48 ; train MAX Paris 8:00 -> Les Aubrais 9:02 (8 min : chaud)
+  const gD = [{ uic: '87574004', base: '2026-12-01', t: [[0, 'T', '14001', '1', 588, 589, [[1, 550]], []]] }];
+  const rows = [{ o: 'PARIS (intramuros)', d: 'LES AUBRAIS ORLEANS', date: '2026-12-01', dep: '08:00', arr: '09:02', depMin: 480, arrMin: 542, ok: true, trains: ['4001'] }];
+  const opts = E.mixedOptions({ O: { name: 'PARIS (intramuros)', uics: ['87547000'] }, D: { name: null, uics: ['87574004'] }, date: '2026-12-01', gO: [], gD, net, rows });
+  assert.equal(opts.length, 1);
+  assert.equal(opts[0].arrMin, 588);
+  assert.equal(opts[0].changes[0].gap, 8);
+  assert.equal(opts[0].changes[0].hot, true);
+  assert.equal(opts[0].free, true);
+});
+
 test('grille officielle des prix', () => {
   assert.equal(E.tarifPattern('PARIS (intramuros)'), 'PARIS*');
   assert.equal(E.tarifPattern('LYON ST EXUPERY TGV.'), 'LYON ST EXUPERY TGV');
