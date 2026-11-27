@@ -103,6 +103,77 @@ export function pretty(name) {
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 /* Carte Avantage (Jeune, Adulte, Senior) : prix maximum garanti en 2de sur TGV INOUI et INTERCITÉS, selon la durée du
    trajet direct : 49 € sous 1 h 30, 69 € de 1 h 30 à 3 h, 89 € au-delà. Rien pour les cars (entité AUTOCAR SNCF). */
+/* ===== Réseau complet (index du robot, d'après le GTFS national SNCF) : trajets avec un TER, un car ou un OUIGO Train Classique ===== */
+export const NET_LABEL = { T: 'TER', C: 'car TER', R: 'tram-train', N: 'navette', I: 'Intercités', O: 'OUIGO Train Classique' };
+// correspondances : confortable à partir de 15 min, « chaude » de 5 à 14 min ; dans une ville à plusieurs gares, 60 et 25 min
+export const CHANGE = { ok: 15, min: 5, cityOk: 60, cityMin: 25 };
+export function haversineKm([la1, lo1], [la2, lo2]) {
+  const r = Math.PI / 180, x = Math.sin((la2 - la1) * r / 2) ** 2 + Math.cos(la1 * r) * Math.cos(la2 * r) * Math.sin((lo2 - lo1) * r / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(x));
+}
+// prix TER estimé (les tarifs TER ne sont plus publiés) : plein tarif ≈ 2 € + 0,16 €/km de voie, voie ≈ 1,15 × vol d'oiseau ;
+// la Carte Avantage Jeune retire 25 à 50 % selon la région
+export function netFare(km) {
+  if (!Number.isFinite(km)) return null;
+  const plein = 2 + 0.16 * km * 1.15;
+  return { min: Math.round(plein * 0.5 * 2) / 2, max: Math.round(plein * 0.75 * 2) / 2, plein: Math.round(plein) };
+}
+export function runsOn(mask36, base, date) {
+  const i = diffDays(date, base), m = parseInt(mask36, 36);
+  return i >= 0 && i < 53 && Math.floor(m / 2 ** i) % 2 === 1;
+}
+/** Trajets combinant un train MAX et un TER (ou car, OUIGO Train Classique) au départ et/ou à l'arrivée,
+ *  plus les trains hors MAX directs. O, D : { name: nom dans les données MAX ou null, uics }. */
+export function mixedOptions({ O, D, date, gO, gD, net, rows, from = 0, to = 1439 }) {
+  const coord = new Map(net.stations.map(s => [s[0], [s[2], s[3]]]));
+  const name = new Map(net.stations.map(s => [s[0], s[1]]));
+  const km = (a, b) => (coord.has(a) && coord.has(b) ? haversineKm(coord.get(a), coord.get(b)) : NaN);
+  const hub = i => net.hubs[i];
+  const pre = [], post = [];
+  for (const g of gO) for (const e of g.t) if (runsOn(e[3], g.base, date)) for (const [h, t] of e[7]) if (hub(h)[0] !== O.name) pre.push({ hub: hub(h)[0], at: hub(h)[1], st: g.uic, dep: e[5], arr: t, cat: e[1], num: e[2] });
+  for (const g of gD) for (const e of g.t) if (runsOn(e[3], g.base, date)) for (const [h, t] of e[6]) if (hub(h)[0] !== D.name) post.push({ hub: hub(h)[0], at: hub(h)[1], st: g.uic, dep: t, arr: e[4], cat: e[1], num: e[2] });
+  const intra = n => /intramuros/i.test(n);
+  const gapOk = (gap, n) => gap >= (intra(n) ? CHANGE.cityMin : CHANGE.min);
+  const hot = (gap, n) => gap < (intra(n) ? CHANGE.cityOk : CHANGE.ok);
+  const netLeg = (x, a, b) => ({ net: true, cat: x.cat, num: x.num, oName: name.get(a) || '', dName: name.get(b) || '', depMin: x.dep, arrMin: x.arr, fare: netFare(km(a, b)) });
+  const out = [], seen = new Set();
+  for (const m of rows) {
+    if (m.date !== date) continue;
+    const needPre = m.o !== O.name, needPost = m.d !== D.name;
+    if (!needPre && !needPost) continue;
+    let a = null, b = null;
+    if (needPre) for (const p of pre) if (p.hub === m.o && gapOk(m.depMin - p.arr, m.o) && (!a || p.arr > a.arr || (p.arr === a.arr && p.dep > a.dep))) a = p;
+    if (needPre && !a) continue;
+    if (needPost) for (const p of post) if (p.hub === m.d && gapOk(p.dep - m.arrMin, m.d) && (!b || p.dep < b.dep || (p.dep === b.dep && p.arr < b.arr))) b = p;
+    if (needPost && !b) continue;
+    const depMin = a ? a.dep : m.depMin, arrMin = b ? b.arr : m.arrMin;
+    if (depMin < from || depMin > to) continue;
+    const key = depMin + '|' + arrMin + '|' + m.trains.join('/');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const legs = [], changes = [];
+    if (a) { legs.push(netLeg(a, a.st, a.at)); const gap = m.depMin - a.arr; changes.push({ at: m.o, gap, hot: hot(gap, m.o), city: intra(m.o) }); }
+    legs.push(m);
+    if (b) { legs.push(netLeg(b, b.at, b.st)); const gap = b.dep - m.arrMin; changes.push({ at: m.d, gap, hot: hot(gap, m.d), city: intra(m.d) }); }
+    const fares = legs.filter(l => l.net).map(l => l.fare);
+    const fare = fares.every(Boolean) ? { min: fares.reduce((s, f) => s + f.min, 0), max: fares.reduce((s, f) => s + f.max, 0) } : null;
+    out.push({ depMin, arrMin, dur: arrMin - depMin, legs, changes, free: m.ok, fare });
+  }
+  // trains hors MAX directs : le même trajet passe par la gare de départ puis par celle d'arrivée
+  const atD = new Map();
+  for (const g of gD) for (const e of g.t) if (runsOn(e[3], g.base, date)) atD.set(e[0], { e, uic: g.uic });
+  for (const g of gO) for (const e of g.t) {
+    const d = atD.get(e[0]);
+    if (!d || !runsOn(e[3], g.base, date) || d.e[4] <= e[5] || e[5] < from || e[5] > to) continue;
+    const key = 'n' + e[0] + '|' + e[5];
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const leg = netLeg({ cat: e[1], num: e[2], dep: e[5], arr: d.e[4] }, g.uic, d.uic);
+    out.push({ depMin: e[5], arrMin: d.e[4], dur: d.e[4] - e[5], legs: [leg], changes: [], free: false, fare: leg.fare, direct: true });
+  }
+  return out.sort((x, y) => (y.free - x.free) || ((x.fare?.max ?? 99) - (y.fare?.max ?? 99)) || x.dur - y.dur).slice(0, 8);
+}
+
 // grille officielle SNCF (open data) : fourchette de prix par trajet ; « Tarif Avantage » = prix avec la Carte Avantage
 export const TARIFS_API = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/tarifs-tgv-inoui-ouigo/records';
 export function tarifPattern(name) {
