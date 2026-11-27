@@ -185,7 +185,14 @@ async function loadStations() {
       S.stations = rows.map(r => ({ n: r.origine, i: [], c: 0 }));
     } catch { S.stations = []; }
   }
-  S.names = S.stations.map(s => s.n);
+  // réseau complet (robot) : les gares sans train MAX deviennent cherchables
+  S.net = await getJSON('data/reseau/index.json').catch(() => null);
+  S.netByName = new Map();
+  if (S.net) {
+    const hubU = new Set(S.net.hubs.map(h => h[1]));
+    for (const [u, n] of S.net.stations) if (!hubU.has(u) && !S.netByName.has(n)) { S.netByName.set(n, u); S.stations.push({ n, i: [], c: 0, net: u }); }
+  }
+  S.names = S.stations.filter(s => !s.net).map(s => s.n);
 }
 
 const histReady = (async () => {
@@ -411,12 +418,50 @@ async function analyse() {
     renderTrajet();
     out.scrollIntoView({ behavior: 'smooth', block: 'start' });
     loadFares(plan).then(n => { if (n && id === runId) renderTrajet(); });
+    loadMixed(q, id).catch(e => console.warn('trajets avec TER', e));
   } catch (e) {
     if (id === runId) out.innerHTML = errorBanner(e);
     console.error(e);
   } finally {
     if (id === runId) $('#t-go').disabled = false;
   }
+}
+
+// trajets avec un TER, un car ou un OUIGO Train Classique au départ ou à l'arrivée (index du réseau complet)
+async function loadMixed(q, id) {
+  if (!S.net) return;
+  const side = n => (S.netByName.has(n) ? { name: null, uics: [S.netByName.get(n)] } : { name: n, uics: S.net.hubs.filter(h => h[0] === n).map(h => h[1]) });
+  const O = side(q.o[0]), D = side(q.d[0]);
+  if (!O.uics.length && !D.uics.length) return;
+  const files = us => Promise.all(us.slice(0, 8).map(u => getJSON(`data/reseau/g/${u}.json`).catch(() => null))).then(l => l.filter(Boolean));
+  const [gO, gD] = await Promise.all([files(O.uics), files(D.uics)]);
+  const hubsOf = (g, k) => [...new Set(g.flatMap(f => f.t.filter(e => E.runsOn(e[3], f.base, q.date)).flatMap(e => e[k].map(([h]) => S.net.hubs[h][0]))))];
+  const A = [...new Set([...(O.name ? [O.name] : []), ...hubsOf(gO, 7)])].slice(0, 25);
+  const B = [...new Set([...(D.name ? [D.name] : []), ...hubsOf(gD, 6)])].slice(0, 25);
+  const rows = A.length && B.length ? await apiRows(`${E.orEq('origine', A)} and ${E.orEq('destination', B)}`, [q.date, q.date]) : [];
+  const fromM = Math.max(0, E.toMin(q.from) - 60 * (1 + q.flexH)), toM = Math.min(1439, E.toMin(q.to) + 60 * (1 + q.flexH));
+  const opts = E.mixedOptions({ O, D, date: q.date, gO, gD, net: S.net, rows, from: fromM, to: toM });
+  if (id !== runId || !T.last) return;
+  T.last.mixed = opts;
+  renderTrajet();
+}
+
+function mixedHTML() {
+  const m = T.last?.mixed;
+  if (!m?.length) return '';
+  const leg = l => (l.net
+    ? `<li><span class="st no"></span><span><b>${E.fmtMin(l.depMin)}</b> ${esc(l.oName)} → ${esc(l.dName)} <span class="muted">${E.fmtMin(l.arrMin)}, ${E.NET_LABEL[l.cat] || 'train'} ${esc(l.num)}${l.fare ? `, ≈ ${E.euros(l.fare.min)}–${E.euros(l.fare.max)} € avec ta Carte Avantage (estimation ; plein tarif ≈ ${l.fare.plein} €)` : ''}</span></span></li>`
+    : `<li><span class="st ${l.ok ? 'ok' : 'no'}"></span><span><b>${l.dep}</b> ${P(l.o)} → ${P(l.d)} <span class="muted">${l.arr}, train ${esc(l.trains.join('/'))}, ${l.ok ? 'MAX à 0 €' : 'MAX complet, payant'}</span></span></li>`);
+  const via = c => `<li class="via">Correspondance à ${P(c.at)} : ${E.fmtDur(c.gap)}${c.hot ? ` — <b>c’est chaud</b>${c.city ? ', et il faut peut-être changer de gare' : ''}` : c.city ? ' (change peut-être de gare)' : ''}</li>`;
+  const card = o => {
+    const parts = [];
+    o.legs.forEach((l, i) => { if (i) parts.push(via(o.changes[i - 1])); parts.push(leg(l)); });
+    const price = o.fare ? `${o.free ? '0 € + ' : ''}≈ ${E.euros(o.fare.min)}–${E.euros(o.fare.max)} €` : o.free ? '0 € + TER' : 'payant';
+    const flags = o.changes.filter(c => c.hot).map(c => `<span class="flag warn">correspondance de ${E.fmtDur(c.gap)} : c’est chaud</span>`);
+    const kind = o.direct ? 'Direct hors MAX' : o.free ? 'MAX à 0 € + TER' : 'MAX payant + TER';
+    return `<div class="opt"><div class="opt-head"><div><div class="opt-time">${E.fmtMin(o.depMin)}<span class="d">→ ${E.fmtMin(o.arrMin)}</span></div><span class="kind">${kind}</span></div><span class="price ${o.free ? 'part' : 'paid'}">${price}</span></div><ul class="legs">${parts.join('')}</ul>${flags.length ? `<div class="flags">${flags.join('')}</div>` : ''}</div>`;
+  };
+  return `<div class="card"><h2>Avec un TER ou un car <small>horaires SNCF, prix TER estimés</small></h2><div class="opts">${m.map(card).join('')}</div><p class="small">Billets séparés : en cas de retard, la correspondance n’est pas garantie. Sous 15 minutes, elle est signalée « chaude ».</p></div>`;
 }
 
 function trainsOf(legs) { return legs.map(l => l.trains.join('/')).join(' + '); }
@@ -623,7 +668,7 @@ function renderTrajet() {
   const { plan } = T.last;
   const parts = [boardHTML()];
   for (const w of plan.warnings) parts.push(banner('warn', esc(w.text)));
-  parts.push(stepsHTML(), optionsHTML(), waitHTML(), deadlinesHTML());
+  parts.push(stepsHTML(), optionsHTML(), mixedHTML(), waitHTML(), deadlinesHTML());
   parts.push(`<div class="seg" role="tablist"><button type="button" role="tab" data-viz="radar" aria-selected="${(T.viz || 'radar') === 'radar'}">Radar</button><button type="button" role="tab" data-viz="hist" aria-selected="${T.viz === 'hist'}">Historique</button><button type="button" role="tab" data-viz="year" aria-selected="${T.viz === 'year'}">Année</button></div><div id="t-viz" class="tab-page"></div>`);
   out.innerHTML = typo(parts.filter(Boolean).join(''));
   drawViz();
